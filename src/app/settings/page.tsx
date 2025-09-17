@@ -1,6 +1,6 @@
 import { listLocalRepositories } from '@/lib/repos'
 import { GlobalConfigEditor, RepoConfigEditor } from '@/components/GitConfigEditors'
-import UserPreferences, { FILE_STATUS_PREF_KEY } from '@/components/UserPreferences'
+import UserPreferences from '@/components/UserPreferences'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

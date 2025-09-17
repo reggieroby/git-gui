@@ -35,6 +35,7 @@ function buildTree(paths: string[]): Node {
 export default function TreeView({
   paths,
   onToggleNode,
+  onFileClick,
   actionLabel,
   expandAllSignal,
   collapseAllSignal,
@@ -43,6 +44,7 @@ export default function TreeView({
 }: {
   paths: string[]
   onToggleNode?: (path: string, isFile: boolean) => void
+  onFileClick?: (path: string) => void
   actionLabel?: string
   expandAllSignal?: number
   collapseAllSignal?: number
@@ -89,10 +91,10 @@ export default function TreeView({
     }
   }, [collapseAllSignal])
 
-  return <NodeList node={root} depth={0} expanded={expanded} onToggle={toggle} onToggleNode={onToggleNode} actionLabel={actionLabel} />
+  return <NodeList node={root} depth={0} expanded={expanded} onToggle={toggle} onToggleNode={onToggleNode} onFileClick={onFileClick} actionLabel={actionLabel} />
 }
 
-function NodeList({ node, depth, expanded, onToggle, onToggleNode, actionLabel }: { node: Node; depth: number; expanded: Set<string>; onToggle: (p: string) => void; onToggleNode?: (path: string, isFile: boolean) => void; actionLabel?: string }) {
+function NodeList({ node, depth, expanded, onToggle, onToggleNode, onFileClick, actionLabel }: { node: Node; depth: number; expanded: Set<string>; onToggle: (p: string) => void; onToggleNode?: (path: string, isFile: boolean) => void; onFileClick?: (path: string) => void; actionLabel?: string }) {
   if (!node.children || node.children.size === 0) return null
   const entries = Array.from(node.children.entries()).sort((a, b) => a[0].localeCompare(b[0]))
   return (
@@ -111,7 +113,7 @@ function NodeList({ node, depth, expanded, onToggle, onToggleNode, actionLabel }
                 />
               ) : null}
               {isFile ? (
-                <span className="tree__label" aria-label="file">📄 {name}</span>
+                <button type="button" onClick={() => onFileClick && onFileClick(child.path)} className="tree__label" aria-label="file" style={{ background: 'transparent', border: 'none', padding: 0, margin: 0, cursor: onFileClick ? 'pointer' : 'default', textAlign: 'left' }}>📄 {name}</button>
               ) : (
               <button
                 type="button"
@@ -125,7 +127,7 @@ function NodeList({ node, depth, expanded, onToggle, onToggleNode, actionLabel }
             )}
             </div>
             {!isFile && isOpen && (
-              <NodeList node={child} depth={depth + 1} expanded={expanded} onToggle={onToggle} onToggleNode={onToggleNode} actionLabel={actionLabel} />
+              <NodeList node={child} depth={depth + 1} expanded={expanded} onToggle={onToggle} onToggleNode={onToggleNode} onFileClick={onFileClick} actionLabel={actionLabel} />
             )}
           </li>
         )

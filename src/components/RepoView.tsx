@@ -219,6 +219,8 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
               files={staged}
               viewKey={`repo:${repoName}:view:staged`}
               defaultViewKey={'prefs:fileStatusDefaultView'}
+              repoName={repoName}
+              statusMode={'staged'}
               actionLabel="Unstage"
               onToggle={(path) => onToggleAction('unstage', path)}
               enableBulk={true}
@@ -230,6 +232,8 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
               files={unstaged}
               viewKey={`repo:${repoName}:view:unstaged`}
               defaultViewKey={'prefs:fileStatusDefaultView'}
+              repoName={repoName}
+              statusMode={'unstaged'}
               actionLabel="Stage"
               onToggle={(path) => onToggleAction('stage', path)}
               enableBulk={true}

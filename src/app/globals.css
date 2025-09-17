@@ -72,3 +72,10 @@ body {
   0%, 100% { opacity: 0.35; transform: scale(0.9); }
   50% { opacity: 0.95; transform: scale(1.1); }
 }
+
+/* Preferences layout */
+.prefs-group { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+.prefs-subgroup { border: 1px dashed #e5e7eb; border-radius: 8px; padding: 10px; }
+.prefs-legend { padding: 0 6px; opacity: 0.85; }
+.prefs-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.prefs-children { margin-top: 10px; padding-left: 12px; border-left: 2px solid #e5e7eb; display: grid; gap: 10px; }
