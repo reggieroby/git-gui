@@ -24,6 +24,9 @@ export async function GET(_req: Request, { params }: { params: { name: string; i
     // Get body separately (can be multi-line)
     const { stdout: bodyOut } = await execFile(gitBin, ['-C', repo.path, 'show', '--quiet', '--pretty=format:%b', id])
     const body = bodyOut.toString()
+    // Get changed files
+    const { stdout: filesOut } = await execFile(gitBin, ['-C', repo.path, 'diff-tree', '--no-commit-id', '--name-only', '-r', id, '-z'])
+    const files = filesOut.toString().split('\u0000').filter(Boolean)
     return NextResponse.json({
       id: full,
       short,
@@ -32,7 +35,8 @@ export async function GET(_req: Request, { params }: { params: { name: string; i
       subject,
       body,
       author: { name: an, email: ae, date: aI },
-      committer: { name: cn, email: ce, date: cI }
+      committer: { name: cn, email: ce, date: cI },
+      files
     })
   } catch (error: any) {
     if (error?.code === 'ENOENT') return NextResponse.json({ error: 'Git binary not found. Install git or set GIT_BIN.' }, { status: 500 })
@@ -40,4 +44,3 @@ export async function GET(_req: Request, { params }: { params: { name: string; i
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
-

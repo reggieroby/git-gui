@@ -2,6 +2,7 @@
 import RepoSidebar, { SectionId } from '@/components/RepoSidebar'
 import TreeView from '@/components/TreeView'
 import GroupedListView from '@/components/GroupedListView'
+import StatusFilesSection from '@/components/StatusFilesSection'
 
 type Repo = {
   name: string
@@ -213,111 +214,29 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
             {/* Staged section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: 0 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    aria-label="Unstage all"
-                    onChange={(e) => {
-                      e.currentTarget.checked = false
-                      onToggleMany('unstage', staged)
-                    }}
-                    disabled={staged.length === 0}
-                  />
-                  <span>Staged</span>
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  {stagedView === 'tree' && (
-                    <>
-                      <button type="button" className="view-toggle__btn" onClick={() => setStagedExpandSig((n) => n + 1)}>Expand all</button>
-                      <button type="button" className="view-toggle__btn" onClick={() => setStagedCollapseSig((n) => n + 1)}>Collapse all</button>
-                    </>
-                  )}
-                  <span className="view-toggle" role="tablist" aria-label="Staged view style">
-                    <button type="button" className={`view-toggle__btn${stagedView === 'list' ? ' is-active' : ''}`} onClick={() => setStagedView('list')}>List</button>
-                    <button type="button" className={`view-toggle__btn${stagedView === 'tree' ? ' is-active' : ''}`} onClick={() => setStagedView('tree')}>Tree</button>
-                  </span>
-                </span>
-              </h3>
-              <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
-                {staged.length === 0 ? (
-                  <div style={{ opacity: 0.7 }}>No changes staged.</div>
-                ) : (
-                  stagedView === 'list' ? (
-                    <GroupedListView
-                      paths={staged}
-                      onToggle={(path) => onToggleAction('unstage', path)}
-                      actionLabel="Unstage"
-                    />
-                  ) : (
-                    <TreeView
-                      paths={staged}
-                      onToggleNode={(path) => onToggleAction('unstage', path)}
-                      actionLabel="Unstage"
-                      expandAllSignal={stagedExpandSig}
-                      collapseAllSignal={stagedCollapseSig}
-                      expandedPaths={stagedExpandedPaths}
-                      onExpandedChange={setStagedExpandedPaths}
-                    />
-                  )
-                )}
-              </div>
-            </div>
+            <StatusFilesSection
+              title="Staged"
+              files={staged}
+              viewKey={`repo:${repoName}:view:staged`}
+              defaultViewKey={'prefs:fileStatusDefaultView'}
+              actionLabel="Unstage"
+              onToggle={(path) => onToggleAction('unstage', path)}
+              enableBulk={true}
+              onBulk={() => onToggleMany('unstage', staged)}
+            />
             {/* Unstaged section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: 0 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    aria-label="Stage all"
-                    onChange={(e) => {
-                      e.currentTarget.checked = false
-                      onToggleMany('stage', unstaged)
-                    }}
-                    disabled={unstaged.length === 0}
-                  />
-                  <span>Unstaged</span>
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  {unstagedView === 'tree' && (
-                    <>
-                      <button type="button" className="view-toggle__btn" onClick={() => setUnstagedExpandSig((n) => n + 1)}>Expand all</button>
-                      <button type="button" className="view-toggle__btn" onClick={() => setUnstagedCollapseSig((n) => n + 1)}>Collapse all</button>
-                    </>
-                  )}
-                  <span className="view-toggle" role="tablist" aria-label="Unstaged view style">
-                    <button type="button" className={`view-toggle__btn${unstagedView === 'list' ? ' is-active' : ''}`} onClick={() => setUnstagedView('list')}>List</button>
-                    <button type="button" className={`view-toggle__btn${unstagedView === 'tree' ? ' is-active' : ''}`} onClick={() => setUnstagedView('tree')}>Tree</button>
-                  </span>
-                </span>
-              </h3>
-              <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
-                {unstaged.length === 0 ? (
-                  <div style={{ opacity: 0.7 }}>No unstaged changes.</div>
-                ) : (
-                  unstagedView === 'list' ? (
-                    <GroupedListView
-                      paths={unstaged}
-                      onToggle={(path) => onToggleAction('stage', path)}
-                      actionLabel="Stage"
-                    />
-                  ) : (
-                    <TreeView
-                      paths={unstaged}
-                      onToggleNode={(path) => onToggleAction('stage', path)}
-                      actionLabel="Stage"
-                      expandAllSignal={unstagedExpandSig}
-                      collapseAllSignal={unstagedCollapseSig}
-                      expandedPaths={unstagedExpandedPaths}
-                      onExpandedChange={setUnstagedExpandedPaths}
-                    />
-                  )
-                )}
-              </div>
-              {/* Commit row */}
-              <CommitRow repoName={repoName} hasStaged={staged.length > 0} onCommitted={async () => { await onCommitDone(); }} />
-            </div>
+            <StatusFilesSection
+              title="Unstaged"
+              files={unstaged}
+              viewKey={`repo:${repoName}:view:unstaged`}
+              defaultViewKey={'prefs:fileStatusDefaultView'}
+              actionLabel="Stage"
+              onToggle={(path) => onToggleAction('stage', path)}
+              enableBulk={true}
+              onBulk={() => onToggleMany('stage', unstaged)}
+            />
+            {/* Commit row */}
+            <CommitRow repoName={repoName} hasStaged={staged.length > 0} onCommitted={async () => { await onCommitDone(); }} />
           </div>
         )}
       </div>

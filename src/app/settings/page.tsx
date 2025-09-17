@@ -1,5 +1,6 @@
 import { listLocalRepositories } from '@/lib/repos'
 import { GlobalConfigEditor, RepoConfigEditor } from '@/components/GitConfigEditors'
+import UserPreferences, { FILE_STATUS_PREF_KEY } from '@/components/UserPreferences'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,11 +25,11 @@ export default async function SettingsPage() {
       </section>
 
       <section style={{ width: '100%' }}>
-        <GlobalConfigEditor />
-      </section>
-
-      <section style={{ width: '100%' }}>
-        <h2 style={{ margin: 0 }}>Repositories</h2>
+        <h2 style={{ margin: 0 }}>Git</h2>
+        <div style={{ marginTop: 8 }}>
+          <GlobalConfigEditor />
+        </div>
+        <h3 style={{ marginTop: '1rem' }}>Repositories</h3>
         {repos.length === 0 ? (
           <p style={{ opacity: 0.8 }}>No repositories found at <code>/srv/repositories</code>.</p>
         ) : (
@@ -61,6 +62,10 @@ export default async function SettingsPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section style={{ width: '100%' }}>
+        <UserPreferences />
       </section>
     </main>
   )

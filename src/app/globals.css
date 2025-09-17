@@ -54,7 +54,17 @@ body {
 /* Commit graph */
 .commit-graph__cell { position: relative; height: 18px; border-left: 2px solid #e5e7eb; }
 .commit-graph__cell.is-node::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 999px; background: #111827; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px #ffffff; }
-.commit-graph__row.is-selected { background: #f8fafc; }
+.commit-graph__row.is-selected {
+  background: #eef2ff; /* light indigo */
+  border-radius: 6px;
+  border-left: 3px solid #6366f1; /* indigo accent */
+}
+.commit-graph__row.is-selected code { color: #111827; font-weight: 600; }
+.commit-graph__row.is-selected .commit-graph__cell { border-left-color: #c7d2fe; }
+.commit-graph__row.is-selected .commit-graph__cell.is-node::after {
+  background: #1d4ed8; /* blue node */
+  box-shadow: 0 0 0 3px #eef2ff; /* ring that matches row bg */
+}
 
 /* Gentle inline loading indicator */
 .loading-dot { width: 8px; height: 8px; border-radius: 999px; background: #9ca3af; display: inline-block; animation: loading-dot-pulse 1s ease-in-out infinite; }

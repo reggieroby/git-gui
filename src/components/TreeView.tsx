@@ -103,11 +103,13 @@ function NodeList({ node, depth, expanded, onToggle, onToggleNode, actionLabel }
         return (
           <li key={child.path} className="tree__item">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                type="checkbox"
-                aria-label={actionLabel || 'toggle'}
-                onChange={() => onToggleNode && onToggleNode(child.path, isFile)}
-              />
+              {onToggleNode ? (
+                <input
+                  type="checkbox"
+                  aria-label={actionLabel || 'toggle'}
+                  onChange={() => onToggleNode && onToggleNode(child.path, isFile)}
+                />
+              ) : null}
               {isFile ? (
                 <span className="tree__label" aria-label="file">📄 {name}</span>
               ) : (

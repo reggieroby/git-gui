@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import CommitGraph from '@/components/CommitGraph'
 import { useMemo } from 'react'
+import StatusFilesSection from '@/components/StatusFilesSection'
 
 export default function HistorySection({ repoName }: { repoName: string }) {
   const [rows, setRows] = useState<{ short: string; lane: number; message?: string; authorName?: string; authorEmail?: string; authorDate?: string }[]>([])
@@ -107,6 +108,11 @@ function CommitDetail({ detail }: { detail: any | null }) {
               <code key={p} className="tree__label">{p}</code>
             ))}
           </div>
+        </div>
+      )}
+      {Array.isArray(d.files) && (
+        <div style={{ marginTop: 8, minHeight: 0 }}>
+          <StatusFilesSection title="Files" files={d.files} defaultViewKey={'prefs:fileStatusDefaultView'} />
         </div>
       )}
     </div>
