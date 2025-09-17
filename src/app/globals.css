@@ -1,0 +1,43 @@
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+* { box-sizing: border-box; }
+
+/* Repository view shell */
+.repo-shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+.repo-shell__sidebar { border-right: 1px solid #e5e7eb; background: #f8fafc; }
+.repo-shell__content { padding: 1.5rem 2rem; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+/* Sidebar nav */
+.repo-sidebar { position: sticky; top: 0; padding: 1rem; display: grid; gap: 0.75rem; }
+.repo-sidebar__header { font-weight: 600; color: #0f172a; letter-spacing: 0.2px; }
+.repo-sidebar__list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.25rem; }
+.repo-sidebar__button { display: block; width: 100%; text-align: left; padding: 0.45rem 0.6rem; border-radius: 6px; color: #0f172a; text-decoration: none; background: transparent; border: none; cursor: pointer; }
+.repo-sidebar__button:hover { background: #eef2ff; color: #3730a3; }
+.repo-sidebar__item--active .repo-sidebar__button { background: #e0e7ff; color: #1e1b4b; }
+
+@media (max-width: 860px) {
+  .repo-shell { grid-template-columns: 1fr; }
+  .repo-shell__sidebar { border-right: none; border-bottom: 1px solid #e5e7eb; }
+}
+
+/* Simple tree view */
+.tree { list-style: none; padding-left: 0.25rem; margin: 0.15rem 0; }
+.tree__item { margin: 0.1rem 0; }
+.tree__label { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.85rem; }
+.tree__folder { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.tree__folder:hover { background: #f1f5f9; }
+.tree__caret { width: 0; height: 0; border-left: 5px solid #374151; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform 0.12s ease; }
+.tree__caret.is-open { transform: rotate(90deg); }
+
+/* View toggles */
+.view-toggle { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+.view-toggle__btn { padding: 4px 8px; background: #fff; border: none; cursor: pointer; font-size: 0.85rem; }
+.view-toggle__btn + .view-toggle__btn { border-left: 1px solid #e5e7eb; }
+.view-toggle__btn.is-active { background: #eef2ff; color: #3730a3; }
+
+/* Commit graph */
+.commit-graph__cell { position: relative; height: 18px; border-left: 2px solid #e5e7eb; }
+.commit-graph__cell.is-node::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 999px; background: #111827; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px #ffffff; }
