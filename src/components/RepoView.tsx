@@ -122,7 +122,7 @@ export default function RepoView({ repo, selectedFromRoute }: { repo: Repo; sele
           <RepoSidebar selected={selected} basePath={`/repositories/${encodeURIComponent(repo.name)}`} onSelect={setSelected} repo={{ name: repo.name, branch: repo.branch, path: repo.path }} />
         </aside>
         <section className="repo-shell__content">
-          <SectionContent selected={selected} repoName={repo.name} onToggleAction={onToggleAction} onToggleMany={onToggleMany} onCommitDone={fetchStatus} mutating={mutating} />
+          <SectionContent selected={selected} repoName={repo.name} onToggleAction={onToggleAction} onToggleMany={onToggleMany} onCommitDone={() => fetchStatus({ soft: true })} mutating={mutating} />
         </section>
       </div>
     </RepoStatusContext.Provider>
@@ -160,7 +160,7 @@ function Header({ name, branch, path }: { name: string; branch: string | null; p
   )
 }
 
-function SectionContent({ selected, repoName, onToggleAction, onToggleMany, mutating }: { selected: SectionId; repoName: string; onToggleAction: (which: 'stage' | 'unstage', path: string) => void; onToggleMany: (which: 'stage' | 'unstage', paths: string[]) => void; mutating: boolean }) {
+function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCommitDone, mutating }: { selected: SectionId; repoName: string; onToggleAction: (which: 'stage' | 'unstage', path: string) => void; onToggleMany: (which: 'stage' | 'unstage', paths: string[]) => void; onCommitDone: () => Promise<void>; mutating: boolean }) {
   const { staged, unstaged, loading, error } = useRepoStatusContext()
   const [stagedView, setStagedView] = useState<'list' | 'tree'>('tree')
   const [unstagedView, setUnstagedView] = useState<'list' | 'tree'>('tree')
