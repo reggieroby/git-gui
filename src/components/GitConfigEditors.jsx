@@ -50,7 +50,7 @@ export function GlobalConfigEditor() {
 
   return (
     <div style={{ display: 'grid', gap: 8, maxWidth: 640 }}>
-      <h2 style={{ margin: 0 }}>Global</h2>
+      <h3 style={{ margin: 0 }}>Global</h3>
       {error && <div style={{ color: '#b91c1c' }}>Error: {error}</div>}
       <label style={{ display: 'grid', gap: 4 }}>
         <span className="tree__label">user.email</span>

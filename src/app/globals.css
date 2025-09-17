@@ -80,6 +80,9 @@ body {
 .prefs-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
 .prefs-children { margin-top: 10px; padding-left: 12px; border-left: 2px solid #e5e7eb; display: grid; gap: 10px; }
 
+/* Settings grouping */
+.settings-children { margin-top: 8px; padding-left: 12px; border-left: 2px solid #e5e7eb; display: grid; gap: 16px; }
+
 /* Info icon + popover */
 .info-icon { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 999px; background: #e5e7eb; color: #111827; font-size: 11px; cursor: default; }
 .info-icon:hover { background: #d1d5db; }

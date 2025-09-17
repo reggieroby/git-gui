@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/migrate.mjs",
+    "prestart": "node scripts/migrate.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -11,7 +13,10 @@
   "dependencies": {
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "umzug": "^3.2.1"
   },
   "devDependencies": {
     "eslint": "latest",

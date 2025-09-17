@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { getLocalRepository } from '@/lib/repos'
 import { execFile as _execFile } from 'child_process'
 import { promisify } from 'util'
-import { stat, mkdir, readFile, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { stat } from 'fs/promises'
+import { getSetting, setSetting } from '@/lib/db'
 
 const execFile = promisify(_execFile)
 
@@ -11,18 +11,18 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 
-export async function GET(_req, { params }) {
+export async function GET(_req, context) {
   try {
-    const name = decodeURIComponent(params.name)
-    const repo = await getLocalRepository(name)
+    const { name } = await context.params
+    const repoName = decodeURIComponent(name)
+    const repo = await getLocalRepository(repoName)
     if (!repo) return NextResponse.json({ error: 'Repository not found' }, { status: 404 })
     const isGit = await isGitRepository(repo.path)
     if (!isGit) return NextResponse.json({ email: null, name: null })
 
     const gitBin = process.env.GIT_BIN || 'git'
-    const store = await readSettings()
-    const email = (store[`git/ repo/${name}/user.email`]) ?? await readConfig(gitBin, repo.path, 'user.email')
-    const userName = (store[`git/ repo/${name}/user.name`]) ?? await readConfig(gitBin, repo.path, 'user.name')
+    const email = (await getSetting(`git/repo/${repoName}/user.email`)) ?? await readConfig(gitBin, repo.path, 'user.email')
+    const userName = (await getSetting(`git/repo/${repoName}/user.name`)) ?? await readConfig(gitBin, repo.path, 'user.name')
     return NextResponse.json({ email, name: userName })
   } catch (error) {
     if (error?.code === 'ENOENT') {
@@ -32,10 +32,11 @@ export async function GET(_req, { params }) {
   }
 }
 
-export async function POST(req, { params }) {
+export async function POST(req, context) {
   try {
-    const name = decodeURIComponent(params.name)
-    const repo = await getLocalRepository(name)
+    const { name } = await context.params
+    const repoName = decodeURIComponent(name)
+    const repo = await getLocalRepository(repoName)
     if (!repo) return NextResponse.json({ error: 'Repository not found' }, { status: 404 })
     const isGit = await isGitRepository(repo.path)
     if (!isGit) return NextResponse.json({ error: 'Not a Git repository' }, { status: 400 })
@@ -44,11 +45,11 @@ export async function POST(req, { params }) {
     const body = (await req.json().catch(() => ({})))
     if (typeof body.email !== 'undefined') {
       await writeConfig(gitBin, repo.path, 'user.email', body.email)
-      await writeSetting(`git/ repo/${name}/user.email`, body.email ?? '')
+      await setSetting(`git/repo/${repoName}/user.email`, body.email ?? '')
     }
     if (typeof body.name !== 'undefined') {
       await writeConfig(gitBin, repo.path, 'user.name', body.name)
-      await writeSetting(`git/ repo/${name}/user.name`, body.name ?? '')
+      await setSetting(`git/repo/${repoName}/user.name`, body.name ?? '')
     }
     return GET(req, { params })
   } catch (error) {
@@ -90,15 +91,4 @@ async function isGitRepository(repoPath) {
   }
 }
 
-// Settings store helpers
-const DEFAULT_STORE = join(process.cwd(), '.data', 'settings.json')
-async function ensureDir(p) { try { await mkdir(dirname(p), { recursive: true }) } catch {} }
-async function readSettings(filePath = DEFAULT_STORE) {
-  try { const raw = await readFile(filePath, 'utf8'); return JSON.parse(raw) || {} } catch { return {} }
-}
-async function writeSettings(obj, filePath = DEFAULT_STORE) {
-  await ensureDir(filePath); await writeFile(filePath, JSON.stringify(obj, null, 2), 'utf8')
-}
-async function writeSetting(key, value) {
-  const all = await readSettings(); all[key] = value; await writeSettings(all)
-}
+// removed file-based settings helpers; using sqlite-backed store instead

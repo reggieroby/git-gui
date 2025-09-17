@@ -9,10 +9,11 @@ const execFile = promisify(_execFile)
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function POST(req, { params }) {
+export async function POST(req, context) {
   try {
-    const name = decodeURIComponent(params.name)
-    const repo = await getLocalRepository(name)
+    const { name } = await context.params
+    const repoName = decodeURIComponent(name)
+    const repo = await getLocalRepository(repoName)
     if (!repo) return NextResponse.json({ error: 'Repository not found' }, { status: 404 })
 
     const isGit = await isGitRepository(repo.path)

@@ -8,10 +8,11 @@ const execFile = promisify(_execFile)
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   try {
-    const name = decodeURIComponent(params.name)
-    const repo = await getLocalRepository(name)
+    const { name } = await context.params
+    const repoName = decodeURIComponent(name)
+    const repo = await getLocalRepository(repoName)
     if (!repo) return NextResponse.json({ error: 'Repository not found' }, { status: 404 })
     const { searchParams } = new URL(req.url)
     const path = searchParams.get('path')

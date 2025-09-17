@@ -11,11 +11,12 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   _req,
-  { params }
+  context
 ) {
   try {
-    const name = decodeURIComponent(params.name)
-    const repo = await getLocalRepository(name)
+    const { name } = await context.params
+    const repoName = decodeURIComponent(name)
+    const repo = await getLocalRepository(repoName)
     if (!repo) return NextResponse.json({ error: 'Repository not found' }, { status: 404 })
 
     // If this is not a Git repository, return empty status gracefully
