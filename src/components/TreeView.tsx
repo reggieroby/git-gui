@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 
 type Node = {
   name: string
@@ -32,18 +32,62 @@ function buildTree(paths: string[]): Node {
   return root
 }
 
-export default function TreeView({ paths, onToggleNode, actionLabel }: { paths: string[]; onToggleNode?: (path: string, isFile: boolean) => void; actionLabel?: string }) {
+export default function TreeView({
+  paths,
+  onToggleNode,
+  actionLabel,
+  expandAllSignal,
+  collapseAllSignal,
+  expandedPaths,
+  onExpandedChange
+}: {
+  paths: string[]
+  onToggleNode?: (path: string, isFile: boolean) => void
+  actionLabel?: string
+  expandAllSignal?: number
+  collapseAllSignal?: number
+  expandedPaths?: Set<string>
+  onExpandedChange?: (next: Set<string>) => void
+}) {
   const root = useMemo(() => buildTree(paths), [paths])
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set<string>())
+  const [expandedState, setExpandedState] = useState<Set<string>>(() => new Set<string>())
+  const expanded = expandedPaths ?? expandedState
+
+  function setExpanded(next: Set<string>) {
+    if (onExpandedChange) onExpandedChange(new Set(next))
+    else setExpandedState(new Set(next))
+  }
 
   function toggle(path: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(path)) next.delete(path)
-      else next.add(path)
-      return next
-    })
+    const next = new Set(expanded)
+    if (next.has(path)) next.delete(path)
+    else next.add(path)
+    setExpanded(next)
   }
+
+  function collectFolderPaths(node: Node, acc: string[]) {
+    if (node.children && node.children.size > 0) {
+      if (node.path) acc.push(node.path)
+      for (const [, child] of node.children) collectFolderPaths(child, acc)
+    }
+  }
+
+  // Respond to expand/collapse all signals
+  useEffect(() => {
+    if (typeof expandAllSignal === 'number' && expandAllSignal > 0) {
+      const folders: string[] = []
+      collectFolderPaths(root, folders)
+      setExpanded(new Set(folders))
+    }
+    // Intentionally not depending on `root` so we don't reset on data refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandAllSignal])
+
+  useEffect(() => {
+    if (typeof collapseAllSignal === 'number' && collapseAllSignal > 0) {
+      setExpanded(new Set())
+    }
+  }, [collapseAllSignal])
 
   return <NodeList node={root} depth={0} expanded={expanded} onToggle={toggle} onToggleNode={onToggleNode} actionLabel={actionLabel} />
 }

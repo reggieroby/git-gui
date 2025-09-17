@@ -9,16 +9,19 @@ type Repo = {
   branch: string | null
 }
 
-export default function RepoView({ repo }: { repo: Repo }) {
-  const [selected, setSelected] = useState<SectionId>('history')
+export default function RepoView({ repo, selectedFromRoute }: { repo: Repo; selectedFromRoute?: import('./RepoSidebar').SectionId }) {
+  const [selected, setSelected] = useState<SectionId>(selectedFromRoute || 'history')
   const [staged, setStaged] = useState<string[]>([])
   const [unstaged, setUnstaged] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mutating, setMutating] = useState(false)
 
-  async function fetchStatus() {
-    setLoading(true)
+  async function fetchStatus(opts?: { soft?: boolean }) {
+    const soft = !!opts?.soft
+    if (!soft) {
+      setLoading(true)
+    }
     setError(null)
     try {
       const res = await fetch(`/api/repositories/${encodeURIComponent(repo.name)}/status`, { cache: 'no-store' })
@@ -30,7 +33,7 @@ export default function RepoView({ repo }: { repo: Repo }) {
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load status')
     } finally {
-      setLoading(false)
+      if (!soft) setLoading(false)
     }
   }
 
@@ -42,15 +45,19 @@ export default function RepoView({ repo }: { repo: Repo }) {
       } catch {}
     }
     load()
-    // Load saved section for this repo from localStorage
-    try {
-      const key = `repo:${repo.name}:section`
-      const saved = (typeof window !== 'undefined' && window.localStorage.getItem(key)) as SectionId | null
-      const valid: SectionId[] = ['file-status', 'history', 'branches', 'tags', 'stashes']
-      if (saved && (valid as string[]).includes(saved)) {
-        setSelected(saved)
-      }
-    } catch {}
+    // Load saved section for this repo from localStorage if no route override
+    if (!selectedFromRoute) {
+      try {
+        const key = `repo:${repo.name}:section`
+        const saved = (typeof window !== 'undefined' && window.localStorage.getItem(key)) as SectionId | null
+        const valid: SectionId[] = ['file-status', 'history', 'branches', 'tags', 'stashes']
+        if (saved && (valid as string[]).includes(saved)) {
+          setSelected(saved)
+        }
+      } catch {}
+    } else {
+      setSelected(selectedFromRoute)
+    }
     return () => {
       cancelled = true
     }
@@ -64,6 +71,11 @@ export default function RepoView({ repo }: { repo: Repo }) {
     } catch {}
   }, [repo.name, selected])
 
+  // Keep selected in sync with route changes
+  useEffect(() => {
+    if (selectedFromRoute) setSelected(selectedFromRoute)
+  }, [selectedFromRoute])
+
   const onToggleAction = async (which: 'stage' | 'unstage', path: string) => {
     setMutating(true)
     try {
@@ -75,7 +87,7 @@ export default function RepoView({ repo }: { repo: Repo }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok && (data as any)?.error) throw new Error((data as any).error)
       if (!res.ok) throw new Error(`Failed to ${which} ${path}`)
-      await fetchStatus()
+      await fetchStatus({ soft: true })
     } catch (e) {
       console.error(e)
     } finally {
@@ -95,7 +107,7 @@ export default function RepoView({ repo }: { repo: Repo }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok && (data as any)?.error) throw new Error((data as any).error)
       if (!res.ok) throw new Error(`Failed to ${which} ${paths.length} paths`)
-      await fetchStatus()
+      await fetchStatus({ soft: true })
     } catch (e) {
       console.error(e)
     } finally {
@@ -107,11 +119,10 @@ export default function RepoView({ repo }: { repo: Repo }) {
     <RepoStatusContext.Provider value={{ staged, unstaged, loading, error }}>
       <div className="repo-shell">
         <aside className="repo-shell__sidebar">
-          <RepoSidebar selected={selected} onSelect={setSelected} />
+          <RepoSidebar selected={selected} basePath={`/repositories/${encodeURIComponent(repo.name)}`} onSelect={setSelected} repo={{ name: repo.name, branch: repo.branch, path: repo.path }} />
         </aside>
         <section className="repo-shell__content">
-          <Header name={repo.name} branch={repo.branch} path={repo.path} />
-          <SectionContent selected={selected} repoName={repo.name} onToggleAction={onToggleAction} onToggleMany={onToggleMany} mutating={mutating} />
+          <SectionContent selected={selected} repoName={repo.name} onToggleAction={onToggleAction} onToggleMany={onToggleMany} onCommitDone={fetchStatus} mutating={mutating} />
         </section>
       </div>
     </RepoStatusContext.Provider>
@@ -153,6 +164,12 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, muta
   const { staged, unstaged, loading, error } = useRepoStatusContext()
   const [stagedView, setStagedView] = useState<'list' | 'tree'>('tree')
   const [unstagedView, setUnstagedView] = useState<'list' | 'tree'>('tree')
+  const [stagedExpandSig, setStagedExpandSig] = useState(0)
+  const [stagedCollapseSig, setStagedCollapseSig] = useState(0)
+  const [unstagedExpandSig, setUnstagedExpandSig] = useState(0)
+  const [unstagedCollapseSig, setUnstagedCollapseSig] = useState(0)
+  const [stagedExpandedPaths, setStagedExpandedPaths] = useState<Set<string>>(() => new Set())
+  const [unstagedExpandedPaths, setUnstagedExpandedPaths] = useState<Set<string>>(() => new Set())
 
   // Load saved view preferences per repo on mount
   useEffect(() => {
@@ -178,8 +195,10 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, muta
   if (selected === 'file-status') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <h2 style={{ marginTop: '1rem' }}>File Status</h2>
-        {mutating && <div style={{ fontSize: '0.85rem', opacity: 0.75 }}>Applying changes…</div>}
+        <h2 style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>File Status</span>
+          {(mutating || loading) && <span className="loading-dot" aria-hidden title="Updating status" />}
+        </h2>
         {loading ? (
           <div style={{ opacity: 0.7 }}>Loading status…</div>
         ) : error ? (
@@ -208,9 +227,17 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, muta
                   />
                   <span>Staged</span>
                 </span>
-                <span className="view-toggle" role="tablist" aria-label="Staged view style">
-                  <button type="button" className={`view-toggle__btn${stagedView === 'list' ? ' is-active' : ''}`} onClick={() => setStagedView('list')}>List</button>
-                  <button type="button" className={`view-toggle__btn${stagedView === 'tree' ? ' is-active' : ''}`} onClick={() => setStagedView('tree')}>Tree</button>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  {stagedView === 'tree' && (
+                    <>
+                      <button type="button" className="view-toggle__btn" onClick={() => setStagedExpandSig((n) => n + 1)}>Expand all</button>
+                      <button type="button" className="view-toggle__btn" onClick={() => setStagedCollapseSig((n) => n + 1)}>Collapse all</button>
+                    </>
+                  )}
+                  <span className="view-toggle" role="tablist" aria-label="Staged view style">
+                    <button type="button" className={`view-toggle__btn${stagedView === 'list' ? ' is-active' : ''}`} onClick={() => setStagedView('list')}>List</button>
+                    <button type="button" className={`view-toggle__btn${stagedView === 'tree' ? ' is-active' : ''}`} onClick={() => setStagedView('tree')}>Tree</button>
+                  </span>
                 </span>
               </h3>
               <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
@@ -224,7 +251,15 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, muta
                       actionLabel="Unstage"
                     />
                   ) : (
-                    <TreeView paths={staged} onToggleNode={(path) => onToggleAction('unstage', path)} actionLabel="Unstage" />
+                    <TreeView
+                      paths={staged}
+                      onToggleNode={(path) => onToggleAction('unstage', path)}
+                      actionLabel="Unstage"
+                      expandAllSignal={stagedExpandSig}
+                      collapseAllSignal={stagedCollapseSig}
+                      expandedPaths={stagedExpandedPaths}
+                      onExpandedChange={setStagedExpandedPaths}
+                    />
                   )
                 )}
               </div>
@@ -244,9 +279,17 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, muta
                   />
                   <span>Unstaged</span>
                 </span>
-                <span className="view-toggle" role="tablist" aria-label="Unstaged view style">
-                  <button type="button" className={`view-toggle__btn${unstagedView === 'list' ? ' is-active' : ''}`} onClick={() => setUnstagedView('list')}>List</button>
-                  <button type="button" className={`view-toggle__btn${unstagedView === 'tree' ? ' is-active' : ''}`} onClick={() => setUnstagedView('tree')}>Tree</button>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  {unstagedView === 'tree' && (
+                    <>
+                      <button type="button" className="view-toggle__btn" onClick={() => setUnstagedExpandSig((n) => n + 1)}>Expand all</button>
+                      <button type="button" className="view-toggle__btn" onClick={() => setUnstagedCollapseSig((n) => n + 1)}>Collapse all</button>
+                    </>
+                  )}
+                  <span className="view-toggle" role="tablist" aria-label="Unstaged view style">
+                    <button type="button" className={`view-toggle__btn${unstagedView === 'list' ? ' is-active' : ''}`} onClick={() => setUnstagedView('list')}>List</button>
+                    <button type="button" className={`view-toggle__btn${unstagedView === 'tree' ? ' is-active' : ''}`} onClick={() => setUnstagedView('tree')}>Tree</button>
+                  </span>
                 </span>
               </h3>
               <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
@@ -260,10 +303,20 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, muta
                       actionLabel="Stage"
                     />
                   ) : (
-                    <TreeView paths={unstaged} onToggleNode={(path) => onToggleAction('stage', path)} actionLabel="Stage" />
+                    <TreeView
+                      paths={unstaged}
+                      onToggleNode={(path) => onToggleAction('stage', path)}
+                      actionLabel="Stage"
+                      expandAllSignal={unstagedExpandSig}
+                      collapseAllSignal={unstagedCollapseSig}
+                      expandedPaths={unstagedExpandedPaths}
+                      onExpandedChange={setUnstagedExpandedPaths}
+                    />
                   )
                 )}
               </div>
+              {/* Commit row */}
+              <CommitRow repoName={repoName} hasStaged={staged.length > 0} onCommitted={async () => { await onCommitDone(); }} />
             </div>
           </div>
         )}
@@ -318,6 +371,54 @@ function useRepoStatusContext(): RepoStatusContextValue {
   const ctx = useContext(RepoStatusContext)
   if (!ctx) throw new Error('RepoStatusContext not found')
   return ctx
+}
+
+function CommitRow({ repoName, hasStaged, onCommitted }: { repoName: string; hasStaged: boolean; onCommitted?: () => void }) {
+  const [message, setMessage] = useState('')
+  const [committing, setCommitting] = useState(false)
+  const disabled = !hasStaged
+  const canCommit = !disabled && message.trim().length > 0 && !committing
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+      <textarea
+        placeholder={disabled ? 'No staged changes' : 'Commit message'}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        disabled={disabled || committing}
+        rows={2}
+        style={{ flex: 1, resize: 'vertical', minHeight: 38 }}
+      />
+      <button
+        type="button"
+        onClick={async () => {
+          if (!canCommit) return
+          setCommitting(true)
+          try {
+            const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/commit`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message })
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error((data as any)?.error || `Commit failed (${res.status})`)
+            setMessage('')
+            // notify and refresh status
+            if (onCommitted) await onCommitted()
+            // Force status refresh by dispatching a storage event or rely on page state; here we do nothing and expect user to see staged empty after fetchStatus external triggers.
+          } catch (e) {
+            console.error(e)
+          } finally {
+            setCommitting(false)
+          }
+        }}
+        disabled={!canCommit}
+        style={{ padding: '0.5rem 0.75rem' }}
+      >
+        {committing ? 'Committing…' : 'Commit'}
+      </button>
+    </div>
+  )
 }
 
  

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { redirect, notFound } from 'next/navigation'
 import { getLocalRepository } from '@/lib/repos'
 import RepoView from '@/components/RepoView'
 
@@ -9,6 +9,6 @@ export default async function RepositoryPage({ params }: { params: { name: strin
   const name = decodeURIComponent(params.name)
   const repo = await getLocalRepository(name)
   if (!repo) return notFound()
-
-  return <RepoView repo={repo} />
+  // Route-based sections: redirect base to history
+  redirect(`/repositories/${encodeURIComponent(name)}/history`)
 }

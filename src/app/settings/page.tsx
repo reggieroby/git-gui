@@ -1,7 +1,10 @@
-import Link from 'next/link'
 import { listLocalRepositories } from '@/lib/repos'
+import { GlobalConfigEditor, RepoConfigEditor } from '@/components/GitConfigEditors'
 
-export default async function Home() {
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+export default async function SettingsPage() {
   const repos = await listLocalRepositories()
   return (
     <main style={{
@@ -11,50 +14,28 @@ export default async function Home() {
       justifyContent: 'flex-start',
       flexDirection: 'column',
       gap: '1.5rem',
-      padding: '2rem'
+      padding: '2rem',
+      maxWidth: 1100,
+      margin: '0 auto'
     }}>
-      <section>
-        <h2 style={{ marginBottom: '0.5rem' }}>Local repositories</h2>
+      <section style={{ width: '100%' }}>
+        <h1 style={{ margin: 0 }}>Git Settings</h1>
+        <p style={{ marginTop: '0.5rem' }}>Edit your global Git identity and per-repository overrides.</p>
+      </section>
+
+      <section style={{ width: '100%' }}>
+        <GlobalConfigEditor />
+      </section>
+
+      <section style={{ width: '100%' }}>
+        <h2 style={{ margin: 0 }}>Repositories</h2>
         {repos.length === 0 ? (
           <p style={{ opacity: 0.8 }}>No repositories found at <code>/srv/repositories</code>.</p>
         ) : (
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              display: 'grid',
-              gap: '0.75rem',
-              maxWidth: 900,
-              width: '100%'
-            }}
-          >
+          <ul style={{ listStyle: 'none', padding: 0, margin: '1rem 0', display: 'grid', gap: '1rem' }}>
             {repos.map((r) => (
-              <li
-                key={r.path}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
-                  padding: '0.75rem 1rem',
-                  background: '#fff',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                }}
-              >
-                <Link
-                  href={`/repositories/${encodeURIComponent(r.name)}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '1rem',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    width: '100%'
-                  }}
-                >
+              <li key={r.path} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.75rem 1rem', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div>
                     <code style={{ fontSize: '0.95rem' }}>{r.name}</code>
                     <div style={{ opacity: 0.7, fontSize: '0.85rem', marginTop: 4 }}>{r.path}</div>
@@ -74,7 +55,8 @@ export default async function Home() {
                   >
                     {r.branch ?? 'unknown'}
                   </span>
-                </Link>
+                </div>
+                <RepoConfigEditor repoName={r.name} />
               </li>
             ))}
           </ul>

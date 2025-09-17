@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import { listLocalRepositories } from '@/lib/repos'
 
-export default async function Home() {
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+export default async function RepositoriesPage() {
   const repos = await listLocalRepositories()
   return (
     <main style={{
@@ -13,6 +16,11 @@ export default async function Home() {
       gap: '1.5rem',
       padding: '2rem'
     }}>
+      <section>
+        <h1 style={{ margin: 0 }}>Repositories</h1>
+        <p style={{ marginTop: '0.5rem' }}>Local repositories discovered under <code>/srv/repositories</code>.</p>
+      </section>
+
       <section>
         <h2 style={{ marginBottom: '0.5rem' }}>Local repositories</h2>
         {repos.length === 0 ? (

@@ -9,7 +9,16 @@ const execFile = promisify(_execFile)
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-type HistoryRow = { id: string; short: string; parents: string[]; lane: number }
+type HistoryRow = {
+  id: string
+  short: string
+  parents: string[]
+  lane: number
+  message: string
+  authorName: string
+  authorEmail: string
+  authorDate: string
+}
 
 export async function GET(
   _req: Request,
@@ -27,12 +36,12 @@ export async function GET(
     // Latest first (top). Limit to 200 to keep UI snappy; adjust as needed.
     const { stdout } = await execFile(gitBin, [
       '-C', repo.path,
-      'log', '--topo-order', '--pretty=format:%H%x00%h%x00%P', '-z', '-n', '200'
+      'log', '--topo-order', '--date=iso-strict', '--pretty=format:%H%x00%h%x00%P%x00%s%x00%an%x00%ae%x00%aI', '-z', '-n', '200'
     ])
     const commits = parseLog(stdout as unknown as Buffer)
     const { rows, maxLanes } = assignLanes(commits)
     // Only return the essentials needed by the UI
-    return NextResponse.json({ commits: rows.map(r => ({ short: r.short, lane: r.lane })), maxLanes })
+    return NextResponse.json({ commits: rows.map(r => ({ id: r.id, short: r.short, lane: r.lane, message: r.message, authorName: r.authorName, authorEmail: r.authorEmail, authorDate: r.authorDate })), maxLanes })
   } catch (error: any) {
     if (error?.code === 'ENOENT') {
       return NextResponse.json({ error: 'Git binary not found. Install git or set GIT_BIN.' }, { status: 500 })
@@ -57,22 +66,26 @@ async function isGitRepository(repoPath: string): Promise<boolean> {
   }
 }
 
-function parseLog(buf: Buffer | string): { id: string; short: string; parents: string[] }[] {
+function parseLog(buf: Buffer | string): { id: string; short: string; parents: string[]; message: string; authorName: string; authorEmail: string; authorDate: string }[] {
   const s = Buffer.isBuffer(buf) ? buf.toString('utf8') : buf
   const parts = s.split('\u0000').filter(Boolean)
-  const commits: { id: string; short: string; parents: string[] }[] = []
-  // The format is id\0short\0parents, but because we split on \0, entries come grouped by 3
-  for (let i = 0; i < parts.length; i += 3) {
+  const commits: { id: string; short: string; parents: string[]; message: string; authorName: string; authorEmail: string; authorDate: string }[] = []
+  // Format: id\0short\0parents\0message\0authorName\0authorEmail\0authorDate
+  for (let i = 0; i + 6 < parts.length; i += 7) {
     const id = parts[i]
     const short = parts[i + 1] || id.slice(0, 7)
     const parentsStr = parts[i + 2] || ''
+    const message = parts[i + 3] || ''
+    const authorName = parts[i + 4] || ''
+    const authorEmail = parts[i + 5] || ''
+    const authorDate = parts[i + 6] || ''
     const parents = parentsStr.trim() ? parentsStr.trim().split(' ') : []
-    commits.push({ id, short, parents })
+    commits.push({ id, short, parents, message, authorName, authorEmail, authorDate })
   }
   return commits
 }
 
-function assignLanes(commits: { id: string; short: string; parents: string[] }[]): { rows: HistoryRow[]; maxLanes: number } {
+function assignLanes(commits: { id: string; short: string; parents: string[]; message: string; authorName: string; authorEmail: string; authorDate: string }[]): { rows: HistoryRow[]; maxLanes: number } {
   const active: string[] = []
   const rows: HistoryRow[] = []
   let maxLanes = 0
@@ -83,7 +96,7 @@ function assignLanes(commits: { id: string; short: string; parents: string[] }[]
       active.push(c.id)
     }
     // Record row before mutating active
-    rows.push({ id: c.id, short: c.short, parents: c.parents, lane: idx })
+    rows.push({ id: c.id, short: c.short, parents: c.parents, lane: idx, message: c.message, authorName: c.authorName, authorEmail: c.authorEmail, authorDate: c.authorDate })
 
     // Update active lanes: remove this commit, insert unseen parents at its position
     active.splice(idx, 1)
