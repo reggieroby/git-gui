@@ -10,6 +10,7 @@ export default function StatusFilesSection({
   defaultViewKey,
   repoName,
   statusMode,
+  usePreferences,
   actionLabel,
   onToggle,
   enableBulk,
@@ -21,24 +22,13 @@ export default function StatusFilesSection({
   defaultViewKey?: string
   repoName?: string
   statusMode?: 'staged' | 'unstaged'
+  usePreferences?: boolean
   actionLabel?: string
   onToggle?: (path: string) => void
   enableBulk?: boolean
   onBulk?: () => void
 }) {
-  const [view, setView] = useState<'list' | 'tree'>(() => {
-    if (typeof window !== 'undefined') {
-      if (viewKey) {
-        const v = window.localStorage.getItem(viewKey)
-        if (v === 'list' || v === 'tree') return v
-      }
-      if (defaultViewKey) {
-        const d = window.localStorage.getItem(defaultViewKey)
-        if (d === 'list' || d === 'tree') return d
-      }
-    }
-    return 'tree'
-  })
+  const [view, setView] = useState<'list' | 'tree'>(() => 'tree')
   const [expandSig, setExpandSig] = useState(0)
   const [collapseSig, setCollapseSig] = useState(0)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
@@ -52,6 +42,34 @@ export default function StatusFilesSection({
       if (viewKey && typeof window !== 'undefined') window.localStorage.setItem(viewKey, view)
     } catch {}
   }, [viewKey, view])
+
+  // Apply user preferences (hierarchical) as initial state
+  useEffect(() => {
+    let cancelled = false
+    if (!usePreferences) return
+    ;(async () => {
+      try {
+        const res = await fetch('/api/settings', { cache: 'no-store' })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) return
+        const all = (data && data.settings) || {}
+        const scope = statusMode ? `file status/ ${statusMode}/` : 'file status/'
+        const get = (k: string) => {
+          const specific = `${scope} ${k}`
+          const parent = `file status/ ${k}`
+          return (all[specific] ?? all[parent] ?? '').toString().trim().toLowerCase()
+        }
+        const prefView = get('file view') // 'tree' | 'list' | ''
+        const prefExpand = get('expansion state') // 'expanded' | 'collapsed' | ''
+        if (!cancelled) {
+          if (prefView === 'tree' || prefView === 'list') setView(prefView)
+          if (prefExpand === 'expanded') setExpandSig((n) => n + 1)
+          if (prefExpand === 'collapsed') setCollapseSig((n) => n + 1)
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [usePreferences, statusMode])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minHeight: 0 }}>

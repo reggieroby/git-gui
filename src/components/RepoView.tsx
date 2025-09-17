@@ -217,8 +217,7 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
             <StatusFilesSection
               title="Staged"
               files={staged}
-              viewKey={`repo:${repoName}:view:staged`}
-              defaultViewKey={'prefs:fileStatusDefaultView'}
+              usePreferences={true}
               repoName={repoName}
               statusMode={'staged'}
               actionLabel="Unstage"
@@ -230,8 +229,7 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
             <StatusFilesSection
               title="Unstaged"
               files={unstaged}
-              viewKey={`repo:${repoName}:view:unstaged`}
-              defaultViewKey={'prefs:fileStatusDefaultView'}
+              usePreferences={true}
               repoName={repoName}
               statusMode={'unstaged'}
               actionLabel="Stage"

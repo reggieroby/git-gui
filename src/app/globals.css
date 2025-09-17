@@ -79,3 +79,11 @@ body {
 .prefs-legend { padding: 0 6px; opacity: 0.85; }
 .prefs-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
 .prefs-children { margin-top: 10px; padding-left: 12px; border-left: 2px solid #e5e7eb; display: grid; gap: 10px; }
+
+/* Info icon + popover */
+.info-icon { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 999px; background: #e5e7eb; color: #111827; font-size: 11px; cursor: default; }
+.info-icon:hover { background: #d1d5db; }
+.info-popover { position: absolute; left: 50%; top: 120%; transform: translateX(-50%); background: #fff; color: #111827; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; min-width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); display: none; z-index: 5; }
+.info-icon:hover .info-popover { display: block; }
+.info-link { color: #1d4ed8; text-decoration: none; }
+.info-link:hover { text-decoration: underline; }
