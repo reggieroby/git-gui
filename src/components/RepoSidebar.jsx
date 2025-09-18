@@ -4,10 +4,7 @@ import Link from 'next/link'
 export default function RepoSidebar({ selected, onSelect, basePath, repo }) {
   const items = [
     { id: 'file-status', label: 'File Status' },
-    { id: 'history', label: 'History' },
-    { id: 'branches', label: 'Branches' },
-    { id: 'tags', label: 'Tags' },
-    { id: 'stashes', label: 'Stashes' }
+    { id: 'history', label: 'History' }
   ]
 
   return (

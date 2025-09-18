@@ -11,6 +11,9 @@ export default function HistorySection({ repoName }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [remotes, setRemotes] = useState([])
+  const [remotesLoading, setRemotesLoading] = useState(false)
+  const [remotesError, setRemotesError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -40,6 +43,28 @@ export default function HistorySection({ repoName }) {
 
   useEffect(() => {
     let cancelled = false
+    async function loadRemotes() {
+      setRemotesLoading(true)
+      setRemotesError(null)
+      try {
+        const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/remotes`, { cache: 'no-store' })
+        const data = await res.json().catch(() => ({}))
+        if (!cancelled) {
+          if (!res.ok) throw new Error(data?.error || `Failed to load remotes (${res.status})`)
+          setRemotes(Array.isArray(data.remotes) ? data.remotes : [])
+        }
+      } catch (e) {
+        if (!cancelled) setRemotesError(e?.message || 'Failed to load remotes')
+      } finally {
+        if (!cancelled) setRemotesLoading(false)
+      }
+    }
+    loadRemotes()
+    return () => { cancelled = true }
+  }, [repoName])
+
+  useEffect(() => {
+    let cancelled = false
     async function loadDetail() {
       if (!selectedId) { setDetail(null); return }
       try {
@@ -59,13 +84,103 @@ export default function HistorySection({ repoName }) {
   if (!rows.length) return <div style={{ opacity: 0.7 }}>No commits to display.</div>
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16, minHeight: 0 }}>
-      <div style={{ overflow: 'auto', minHeight: 0 }}>
-        <CommitGraph rows={rows} maxLanes={lanes} selectedId={selectedId} onSelect={(r) => setSelectedId(r.id)} />
+    <div style={{ height: '100%', minHeight: 0, display: 'grid', gridTemplateColumns: '260px 1fr 360px', gap: 16 }}>
+      <aside style={{ borderRight: '1px solid #e5e7eb', paddingRight: 12, overflow: 'auto', minHeight: 0 }}>
+          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Remotes</h3>
+          {remotesLoading ? (
+            <div style={{ opacity: 0.7 }}>Loading…</div>
+          ) : remotesError ? (
+            <div style={{ color: '#b91c1c' }}>Error: {remotesError}</div>
+          ) : remotes.length === 0 ? (
+            <div style={{ opacity: 0.7 }}>No remotes.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {remotes.map((r) => (
+                <div key={r.name}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ fontWeight: 600 }}>{r.name}</div>
+                  </div>
+                  {r.name === 'local' && (
+                    <AddBranchInline
+                      repoName={repoName}
+                      remoteName={r.name}
+                      onAdded={() => {
+                        (async () => {
+                          try {
+                            const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/remotes`, { cache: 'no-store' })
+                            const data = await res.json().catch(() => ({}))
+                            if (res.ok) setRemotes(Array.isArray(data.remotes) ? data.remotes : [])
+                          } catch {}
+                        })()
+                      }}
+                    />
+                  )}
+                  <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '4px 0 0 0' }}>
+                    {(r.branches || []).map((b) => (
+                      <li key={r.name + ':' + b} className="tree__label" style={{ padding: '2px 0' }}>▸ {b}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+      </aside>
+      <div style={{ minHeight: 0, height: '100%', borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb', padding: '0 12px' }}>
+        <div style={{ height: '100%', minHeight: 0 }}>
+          <CommitGraph
+            rows={rows}
+            maxLanes={lanes}
+            selectedId={selectedId}
+            onSelect={(r) => r?.id && setSelectedId(r.id)}
+          />
+        </div>
       </div>
       <div style={{ borderLeft: '1px solid #e5e7eb', paddingLeft: 12, overflow: 'auto', minHeight: 0 }}>
         <CommitDetail detail={detail} />
       </div>
+    </div>
+  )
+}
+
+function AddBranchInline({ repoName, remoteName, onAdded }) {
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  async function add() {
+    const branch = name.trim()
+    if (!branch) return
+    setBusy(true)
+    setErr(null)
+    try {
+      const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/remotes/${encodeURIComponent(remoteName)}/branches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.error) throw new Error(data?.error || `Failed (${res.status})`)
+      setName('')
+      if (onAdded) onAdded()
+    } catch (e) {
+      setErr(e?.message || 'Failed to add branch')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="new-branch-name"
+        style={{ flex: 1, minWidth: 0, padding: '4px 6px', border: '1px solid #e5e7eb', borderRadius: 6 }}
+        disabled={busy}
+        onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+      />
+      <button type="button" className="view-toggle__btn" onClick={add} disabled={busy || !name.trim()}>
+        {busy ? 'Adding…' : 'Add'}
+      </button>
+      {err && <div style={{ color: '#b91c1c', fontSize: '0.8rem' }}>{err}</div>}
     </div>
   )
 }

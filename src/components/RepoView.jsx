@@ -240,9 +240,11 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
   }
   if (selected === 'history') {
     return (
-      <div>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
         <h2>History</h2>
-        <HistorySection repoName={repoName} />
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <HistorySection repoName={repoName} />
+        </div>
       </div>
     )
   }
