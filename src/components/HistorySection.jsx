@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import CommitGraph from '@/components/CommitGraph'
 import { useMemo } from 'react'
+import gql from '@/lib/gql'
+import { Q_HISTORY, Q_REMOTES, Q_COMMIT, M_CREATE_BRANCH } from '@/lib/queries'
 import StatusFilesSection from '@/components/StatusFilesSection'
 
 export default function HistorySection({ repoName }) {
@@ -21,10 +23,9 @@ export default function HistorySection({ repoName }) {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/history`, { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok && data?.error) throw new Error(data.error)
-        if (!res.ok) throw new Error(`Failed to load history (${res.status})`)
+        const resp = await gql(Q_HISTORY, { name: repoName, limit: 200 }, 'RepoHistory')
+        if (resp.errors?.length) throw new Error(resp.errors[0].message || 'GraphQL error')
+        const data = resp.data?.history || { commits: [], maxLanes: 0 }
         if (!cancelled) {
           const commits = Array.isArray(data.commits) ? data.commits : []
           setRows(commits)
@@ -47,10 +48,10 @@ export default function HistorySection({ repoName }) {
       setRemotesLoading(true)
       setRemotesError(null)
       try {
-        const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/remotes`, { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
+        const resp = await gql(Q_REMOTES, { name: repoName }, 'RepoRemotes')
+        const data = resp.data || {}
         if (!cancelled) {
-          if (!res.ok) throw new Error(data?.error || `Failed to load remotes (${res.status})`)
+          if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to load remotes')
           setRemotes(Array.isArray(data.remotes) ? data.remotes : [])
         }
       } catch (e) {
@@ -68,9 +69,8 @@ export default function HistorySection({ repoName }) {
     async function loadDetail() {
       if (!selectedId) { setDetail(null); return }
       try {
-        const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/commit/${encodeURIComponent(selectedId)}`, { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
-        if (!cancelled) setDetail(res.ok ? data : { error: data?.error || `Failed to load ${res.status}` })
+        const resp = await gql(Q_COMMIT, { name: repoName, id: selectedId }, 'Commit')
+        if (!cancelled) setDetail(resp.errors?.length ? { error: resp.errors[0].message || 'Failed to load commit' } : resp.data?.commit)
       } catch (e) {
         if (!cancelled) setDetail({ error: e?.message || 'Failed to load commit' })
       }
@@ -107,9 +107,15 @@ export default function HistorySection({ repoName }) {
                       onAdded={() => {
                         (async () => {
                           try {
-                            const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/remotes`, { cache: 'no-store' })
-                            const data = await res.json().catch(() => ({}))
-                            if (res.ok) setRemotes(Array.isArray(data.remotes) ? data.remotes : [])
+                            const resp = await gql(Q_REMOTES, { name: repoName }, 'RepoRemotes')
+                            if (!resp.errors) setRemotes(Array.isArray(resp.data?.remotes) ? resp.data.remotes : [])
+                          } catch {}
+                          try {
+                            const resp2 = await gql(Q_HISTORY, { name: repoName, limit: 200 }, 'RepoHistory')
+                            if (!resp2.errors) {
+                              const commits = Array.isArray(resp2.data?.history?.commits) ? resp2.data.history.commits : []
+                              setRows(commits); setLanes(Number(resp2.data?.history?.maxLanes) || 1)
+                            }
                           } catch {}
                         })()
                       }}
@@ -117,7 +123,18 @@ export default function HistorySection({ repoName }) {
                   )}
                   <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '4px 0 0 0' }}>
                     {(r.branches || []).map((b) => (
-                      <li key={r.name + ':' + b} className="tree__label" style={{ padding: '2px 0' }}>▸ {b}</li>
+                      <li
+                        key={r.name + ':' + b}
+                        className="tree__label"
+                        style={{ padding: '2px 0', cursor: 'pointer' }}
+                        onClick={() => {
+                          const label = r.name === 'local' ? `local/${b}` : `${r.name}/${b}`
+                          const match = (rows || []).find(rr => Array.isArray(rr.labels) && rr.labels.includes(label))
+                          if (match?.id) setSelectedId(match.id)
+                        }}
+                      >
+                        {b}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -152,13 +169,9 @@ function AddBranchInline({ repoName, remoteName, onAdded }) {
     setBusy(true)
     setErr(null)
     try {
-      const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/remotes/${encodeURIComponent(remoteName)}/branches`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branch })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || data?.error) throw new Error(data?.error || `Failed (${res.status})`)
+      const resp = await gql(M_CREATE_BRANCH, { name: repoName, remote: remoteName, branch }, 'CreateBranch')
+      const data = resp.data?.createBranch
+      if (resp.errors?.length || !data?.ok) throw new Error(data?.pushError || resp.errors?.[0]?.message || 'Failed')
       setName('')
       if (onAdded) onAdded()
     } catch (e) {
@@ -238,3 +251,5 @@ function formatDate(v) {
   if (!v) return ''
   try { return new Date(v).toLocaleString() } catch { return v }
 }
+
+// gql helper centralized in src/lib/gql

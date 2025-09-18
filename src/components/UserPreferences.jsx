@@ -1,5 +1,7 @@
 "use client"
 import { useEffect, useState } from 'react'
+import gql from '@/lib/gql'
+import { Q_SETTINGS, M_SET_SETTING, Q_REPOSITORIES } from '@/lib/queries'
 
 export default function UserPreferences() {
   return (
@@ -19,30 +21,21 @@ function HierarchicalPrefs() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/settings', { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
-        if (!cancelled && res.ok) setSettings(data.settings || {})
+        const resp = await gql(Q_SETTINGS, {}, 'Settings')
+        if (!cancelled && !resp.errors) setSettings(resp.data?.settings || {})
       } catch {}
       try {
-        const res = await fetch('/api/repositories', { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
-        if (!cancelled && res.ok && Array.isArray(data.repositories)) {
-          setRepos(data.repositories.map((r) => ({ name: r.name, path: r.path })))
-        }
+        const resp = await gql(Q_REPOSITORIES, {}, 'Repositories')
+        if (!cancelled && !resp.errors && Array.isArray(resp.data?.repositories)) setRepos(resp.data.repositories.map((r) => ({ name: r.name, path: r.path })))
       } catch {}
     })()
     return () => { cancelled = true }
   }, [])
 
   async function postSetting(key, value) {
-    const res = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, value })
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data?.error || `Failed to save ${key}`)
-    return data.value
+    const resp = await gql(M_SET_SETTING, { key, value }, 'SetSetting')
+    if (resp.errors?.length) throw new Error(resp.errors[0].message || `Failed to save ${key}`)
+    return resp.data?.setSetting?.value
   }
 
   async function save(key, value) {

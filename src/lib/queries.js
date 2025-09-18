@@ -1,0 +1,15 @@
+export const Q_HISTORY = `query RepoHistory($name:String!,$limit:Int){ history(name:$name, limit:$limit){ commits { id short lane parents parentLanes labels message authorName authorEmail authorDate } maxLanes } }`
+export const Q_REMOTES = `query RepoRemotes($name:String!){ remotes(name:$name){ name url branches } }`
+export const Q_COMMIT = `query Commit($name:String!,$id:String!){ commit(name:$name, id:$id){ id short subject body author{ name email date } committer{ name email date } parents files } }`
+export const M_CREATE_BRANCH = `mutation CreateBranch($name:String!,$remote:String!,$branch:String!){ createBranch(name:$name, remote:$remote, branch:$branch){ ok created pushed pushError } }`
+export const Q_STATUS = `query Status($name:String!){ status(name:$name){ staged unstaged } }`
+export const M_STAGE = `mutation Stage($name:String!,$action:String!,$paths:[String!]!){ stage(name:$name, action:$action, paths:$paths){ ok } }`
+export const M_COMMIT = `mutation CommitCreate($name:String!,$message:String!){ commitCreate(name:$name, message:$message){ ok } }`
+export const Q_SETTINGS = `query Settings{ settings }`
+export const M_SET_SETTING = `mutation SetSetting($key:String!,$value:String){ setSetting(key:$key, value:$value){ ok key value } }`
+export const Q_DIFF = `query Diff($name:String!,$path:String!,$staged:Boolean){ diff(name:$name, path:$path, staged:$staged){ path staged text } }`
+export const Q_REPOSITORIES = `query Repositories{ repositories{ name path } }`
+export const Q_GLOBAL_CONFIG = `query GlobalConfig{ globalConfig{ email name } }`
+export const M_SET_GLOBAL_CONFIG = `mutation SetGlobalConfig($email:String,$name:String){ setGlobalConfig(email:$email, name:$name){ email name } }`
+export const Q_REPO_CONFIG = `query RepoConfig($name:String!){ repoConfig(name:$name){ email name } }`
+export const M_SET_REPO_CONFIG = `mutation SetRepoConfig($name:String!,$email:String,$userName:String){ setRepoConfig(name:$name, email:$email, userName:$userName){ email name } }`

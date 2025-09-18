@@ -3,6 +3,8 @@ import RepoSidebar from '@/components/RepoSidebar'
 import TreeView from '@/components/TreeView'
 import GroupedListView from '@/components/GroupedListView'
 import StatusFilesSection from '@/components/StatusFilesSection'
+import gql from '@/lib/gql'
+import { Q_STATUS, M_STAGE, M_COMMIT } from '@/lib/queries'
 
 export default function RepoView({ repo, selectedFromRoute }) {
   const [selected, setSelected] = useState(selectedFromRoute || 'history')
@@ -19,10 +21,9 @@ export default function RepoView({ repo, selectedFromRoute }) {
     }
     setError(null)
     try {
-      const res = await fetch(`/api/repositories/${encodeURIComponent(repo.name)}/status`, { cache: 'no-store' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok && data?.error) throw new Error(data.error)
-      if (!res.ok) throw new Error(`Failed to load status (${res.status})`)
+      const resp = await gql(Q_STATUS, { name: repo.name }, 'Status')
+      if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to load status')
+      const data = resp.data?.status || { staged: [], unstaged: [] }
       setStaged(Array.isArray(data.staged) ? data.staged : [])
       setUnstaged(Array.isArray(data.unstaged) ? data.unstaged : [])
     } catch (e) {
@@ -74,14 +75,8 @@ export default function RepoView({ repo, selectedFromRoute }) {
   const onToggleAction = async (which, path) => {
     setMutating(true)
     try {
-      const res = await fetch(`/api/repositories/${encodeURIComponent(repo.name)}/stage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: which, paths: [path] })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok && data?.error) throw new Error(data.error)
-      if (!res.ok) throw new Error(`Failed to ${which} ${path}`)
+      const resp = await gql(M_STAGE, { name: repo.name, action: which, paths: [path] }, 'Stage')
+      if (resp.errors?.length || !resp.data?.stage?.ok) throw new Error(resp.errors?.[0]?.message || `Failed to ${which} ${path}`)
       await fetchStatus({ soft: true })
     } catch (e) {
       console.error(e)
@@ -94,14 +89,8 @@ export default function RepoView({ repo, selectedFromRoute }) {
     if (!paths || paths.length === 0) return
     setMutating(true)
     try {
-      const res = await fetch(`/api/repositories/${encodeURIComponent(repo.name)}/stage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: which, paths })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok && data?.error) throw new Error(data.error)
-      if (!res.ok) throw new Error(`Failed to ${which} ${paths.length} paths`)
+      const resp = await gql(M_STAGE, { name: repo.name, action: which, paths }, 'Stage')
+      if (resp.errors?.length || !resp.data?.stage?.ok) throw new Error(resp.errors?.[0]?.message || `Failed to ${which} ${paths.length} paths`)
       await fetchStatus({ soft: true })
     } catch (e) {
       console.error(e)
@@ -304,13 +293,8 @@ function CommitRow({ repoName, hasStaged, onCommitted }) {
           if (!canCommit) return
           setCommitting(true)
           try {
-            const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/commit`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message })
-            })
-            const data = await res.json().catch(() => ({}))
-            if (!res.ok) throw new Error(data?.error || `Commit failed (${res.status})`)
+            const resp = await gql(M_COMMIT, { name: repoName, message }, 'CommitCreate')
+            if (resp.errors?.length || !resp.data?.commitCreate?.ok) throw new Error(resp.errors?.[0]?.message || 'Commit failed')
             setMessage('')
             // notify and refresh status
             if (onCommitted) await onCommitted()
@@ -329,5 +313,7 @@ function CommitRow({ repoName, hasStaged, onCommitted }) {
     </div>
   )
 }
+
+// gql helper centralized in src/lib/gql
 
  

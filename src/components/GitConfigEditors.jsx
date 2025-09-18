@@ -1,5 +1,7 @@
 "use client"
 import { useEffect, useState } from 'react'
+import gql from '@/lib/gql'
+import { Q_GLOBAL_CONFIG, M_SET_GLOBAL_CONFIG, Q_REPO_CONFIG, M_SET_REPO_CONFIG } from '@/lib/queries'
 
 export function GlobalConfigEditor() {
   const [cfg, setCfg] = useState({ email: null, name: null })
@@ -12,9 +14,9 @@ export function GlobalConfigEditor() {
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/config/global', { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data?.error || `Failed to load (${res.status})`)
+        const resp = await gql(Q_GLOBAL_CONFIG, {}, 'GlobalConfig')
+        if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to load')
+        const data = resp.data?.globalConfig || {}
         if (!cancelled) {
           setCfg({ email: data.email ?? null, name: data.name ?? null })
           setEmail(data.email ?? '')
@@ -31,13 +33,9 @@ export function GlobalConfigEditor() {
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch('/api/config/global', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(partial)
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || `Failed to save (${res.status})`)
+      const resp = await gql(M_SET_GLOBAL_CONFIG, partial, 'SetGlobalConfig')
+      if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to save')
+      const data = resp.data?.setGlobalConfig || {}
       setCfg({ email: data.email ?? null, name: data.name ?? null })
       setEmail(data.email ?? '')
       setName(data.name ?? '')
@@ -92,9 +90,9 @@ export function RepoConfigEditor({ repoName }) {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/config`, { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data?.error || `Failed to load (${res.status})`)
+        const resp = await gql(Q_REPO_CONFIG, { name: repoName }, 'RepoConfig')
+        if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to load')
+        const data = resp.data?.repoConfig || {}
         if (!cancelled) {
           setEmail(data.email ?? '')
           setName(data.name ?? '')
@@ -112,13 +110,10 @@ export function RepoConfigEditor({ repoName }) {
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(partial)
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || `Failed to save (${res.status})`)
+      const vars = { name: repoName, email: partial.email, userName: partial.name }
+      const resp = await gql(M_SET_REPO_CONFIG, vars, 'SetRepoConfig')
+      if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to save')
+      const data = resp.data?.setRepoConfig || {}
       setEmail(data.email ?? '')
       setName(data.name ?? '')
     } catch (e) {

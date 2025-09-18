@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import GroupedListView from '@/components/GroupedListView'
 import TreeView from '@/components/TreeView'
+import gql from '@/lib/gql'
+import { Q_SETTINGS, Q_DIFF } from '@/lib/queries'
 
 export default function StatusFilesSection({
   title,
@@ -37,10 +39,9 @@ export default function StatusFilesSection({
     if (!usePreferences) return
     ;(async () => {
       try {
-        const res = await fetch('/api/settings', { cache: 'no-store' })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) return
-        const all = (data && data.settings) || {}
+        const resp = await gql(Q_SETTINGS, {}, 'Settings')
+        if (resp.errors?.length) return
+        const all = (resp.data && resp.data.settings) || {}
         const scope = statusMode ? `file status/ ${statusMode}/` : 'file status/'
         const get = (k) => {
           const specific = `${scope} ${k}`
@@ -130,11 +131,9 @@ export default function StatusFilesSection({
     setLoadingDiff(true)
     setDiffError(null)
     try {
-      const qs = new URLSearchParams({ path, staged: String(statusMode === 'staged') })
-      const res = await fetch(`/api/repositories/${encodeURIComponent(repoName)}/diff?${qs.toString()}`, { cache: 'no-store' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.error || `Failed to load diff (${res.status})`)
-      setDiff(data.diff || '')
+      const resp = await gql(Q_DIFF, { name: repoName, path, staged: statusMode === 'staged' }, 'Diff')
+      if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to load diff')
+      setDiff(resp.data?.diff?.text || '')
     } catch (e) {
       setDiffError(e?.message || 'Failed to load diff')
     } finally {
