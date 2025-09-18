@@ -140,6 +140,13 @@ const CreateBranchResultType = new GraphQLObjectType({
     pushError: { type: GraphQLString }
   }
 })
+const CheckoutBranchResultType = new GraphQLObjectType({
+  name: 'CheckoutBranchResult',
+  fields: {
+    ok: { type: new GraphQLNonNull(GraphQLBoolean) },
+    error: { type: GraphQLString }
+  }
+})
 
 const QueryType = new GraphQLObjectType({
   name: 'Query',
@@ -188,6 +195,15 @@ const MutationType = new GraphQLObjectType({
       },
       type: new GraphQLNonNull(CreateBranchResultType),
       resolve: (_src, args) => createBranch(args)
+    },
+    checkoutBranch: {
+      args: {
+        name: { type: new GraphQLNonNull(GraphQLString) },
+        remote: { type: GraphQLString },
+        branch: { type: new GraphQLNonNull(GraphQLString) }
+      },
+      type: new GraphQLNonNull(CheckoutBranchResultType),
+      resolve: (_src, args) => checkoutBranch(args)
     },
     stage: {
       args: { name: { type: new GraphQLNonNull(GraphQLString) }, action: { type: new GraphQLNonNull(GraphQLString) }, paths: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) } },
@@ -407,6 +423,44 @@ async function createBranch({ name, remote, branch, from = 'HEAD' }) {
     catch (e) { pushError = e?.stderr?.toString?.() || e?.message || 'push failed' }
   }
   return { ok: true, created: true, pushed, pushError }
+}
+
+async function checkoutBranch({ name, remote = 'local', branch }) {
+  const repoName = decodeURIComponent(name)
+  const repo = await getLocalRepository(repoName)
+  if (!repo) throw new Error('Repository not found')
+  if (!(await isGitRepository(repo.path))) throw new Error('Not a Git repository')
+  const gitBin = process.env.GIT_BIN || 'git'
+  const branchName = decodeURIComponent(branch)
+  const remoteName = remote == null ? 'local' : decodeURIComponent(remote)
+  if (!branchName) throw new Error('Branch name required')
+  const runWithFallback = async (primary, fallback) => {
+    try {
+      await execFile(gitBin, ['-C', repo.path, ...primary])
+    } catch (err) {
+      if (!fallback) throw err
+      await execFile(gitBin, ['-C', repo.path, ...fallback])
+    }
+  }
+  try {
+    if (remoteName === 'local') {
+      await runWithFallback(['switch', branchName], ['checkout', branchName])
+    } else {
+      let hasLocal = false
+      try {
+        await execFile(gitBin, ['-C', repo.path, 'rev-parse', '--verify', `refs/heads/${branchName}`])
+        hasLocal = true
+      } catch {
+        hasLocal = false
+      }
+      if (hasLocal) await runWithFallback(['switch', branchName], ['checkout', branchName])
+      else await runWithFallback(['switch', '--track', `${remoteName}/${branchName}`], ['checkout', '--track', `${remoteName}/${branchName}`])
+    }
+    return { ok: true, error: null }
+  } catch (error) {
+    const stderr = error?.stderr ? error.stderr.toString().trim() : null
+    return { ok: false, error: stderr || error?.message || 'Failed to switch branch' }
+  }
 }
 
 async function status({ name }) {

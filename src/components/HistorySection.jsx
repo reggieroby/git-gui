@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import CommitGraph from '@/components/CommitGraph'
 import gql from '@/lib/gql'
-import { Q_HISTORY, Q_REMOTES, Q_COMMIT, M_CREATE_BRANCH } from '@/lib/queries'
+import { Q_HISTORY, Q_REMOTES, Q_COMMIT, M_CREATE_BRANCH, M_CHECKOUT_BRANCH } from '@/lib/queries'
 import StatusFilesSection from '@/components/StatusFilesSection'
 
 export default function HistorySection({ repoName }) {
@@ -17,6 +17,8 @@ export default function HistorySection({ repoName }) {
   const [remotesError, setRemotesError] = useState(null)
   const [headBranch, setHeadBranch] = useState(null)
   const [headUpstream, setHeadUpstream] = useState(null)
+  const [switchingKey, setSwitchingKey] = useState(null)
+  const [checkoutError, setCheckoutError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -82,6 +84,29 @@ export default function HistorySection({ repoName }) {
     return () => { cancelled = true }
   }, [repoName, selectedId])
 
+  async function refreshRemotesAndHistory({ selectHead = false } = {}) {
+    try {
+      const resp = await gql(Q_REMOTES, { name: repoName }, 'RepoRemotes')
+      if (!resp.errors) setRemotes(Array.isArray(resp.data?.remotes) ? resp.data.remotes : [])
+    } catch {}
+    try {
+      const resp2 = await gql(Q_HISTORY, { name: repoName, limit: 200 }, 'RepoHistory')
+      if (!resp2.errors) {
+        const hist = resp2.data?.history || {}
+        const commits = Array.isArray(hist.commits) ? hist.commits : []
+        setRows(commits)
+        setLanes(Number(hist.maxLanes) || 1)
+        setHeadBranch(typeof hist.headBranch === 'string' && hist.headBranch ? hist.headBranch : null)
+        setHeadUpstream(typeof hist.headUpstream === 'string' && hist.headUpstream ? hist.headUpstream : null)
+        if (selectHead) {
+          const headRow = commits.find((c) => Array.isArray(c.labels) && c.labels.includes('HEAD'))
+          if (headRow?.id) setSelectedId(headRow.id)
+          else if (commits.length) setSelectedId(commits[0].id)
+        }
+      }
+    } catch {}
+  }
+
   if (loading) return <div style={{ opacity: 0.7 }}>Loading history…</div>
   if (error) return <div style={{ color: '#b91c1c' }}>Error: {error}</div>
   if (!rows.length) return <div style={{ opacity: 0.7 }}>No commits to display.</div>
@@ -90,6 +115,9 @@ export default function HistorySection({ repoName }) {
     <div style={{ height: '100%', minHeight: 0, display: 'grid', gridTemplateColumns: '260px 1fr 360px', gap: 16 }}>
       <aside style={{ borderRight: '1px solid #e5e7eb', paddingRight: 12, overflow: 'auto', minHeight: 0 }}>
           <h3 style={{ marginTop: 0, marginBottom: 8 }}>Remotes</h3>
+          {checkoutError && (
+            <div style={{ color: '#b91c1c', marginBottom: 8 }}>{checkoutError}</div>
+          )}
           {(() => {
             // Determine active local branch (HEAD -> refs/heads/<branch>) and any remote head on the same commit
             let activeLocal = null
@@ -149,29 +177,12 @@ export default function HistorySection({ repoName }) {
                     <AddBranchInline
                       repoName={repoName}
                       remoteName={r.name}
-                      onAdded={() => {
-                        (async () => {
-                          try {
-                            const resp = await gql(Q_REMOTES, { name: repoName }, 'RepoRemotes')
-                            if (!resp.errors) setRemotes(Array.isArray(resp.data?.remotes) ? resp.data.remotes : [])
-                          } catch {}
-                          try {
-                            const resp2 = await gql(Q_HISTORY, { name: repoName, limit: 200 }, 'RepoHistory')
-                            if (!resp2.errors) {
-                              const commits = Array.isArray(resp2.data?.history?.commits) ? resp2.data.history.commits : []
-                              setRows(commits)
-                              setLanes(Number(resp2.data?.history?.maxLanes) || 1)
-                              const hist = resp2.data?.history || {}
-                              setHeadBranch(typeof hist.headBranch === 'string' && hist.headBranch ? hist.headBranch : null)
-                              setHeadUpstream(typeof hist.headUpstream === 'string' && hist.headUpstream ? hist.headUpstream : null)
-                            }
-                          } catch {}
-                        })()
-                      }}
+                      onAdded={() => { refreshRemotesAndHistory() }}
                     />
                   )}
                   <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '4px 0 0 0' }}>
                     {(r.branches || []).map((b) => {
+                      const key = `${r.name}:${b}`
                       const remoteLabel = `refs/remotes/${r.name}/${b}`
                       const upstreamShort = HistorySection.__activeUpstream
                       const upstreamRef = HistorySection.__activeUpstreamRef
@@ -179,12 +190,14 @@ export default function HistorySection({ repoName }) {
                       const isCurrent = r.name === 'local'
                         ? (HistorySection.__activeLocal && b === HistorySection.__activeLocal)
                         : (HistorySection.__activeRemoteRefs?.has(remoteLabel) || isTracking)
+                      const isSwitching = switchingKey === key
                       return (
                       <li
                         key={r.name + ':' + b}
                         className="tree__label"
-                        style={{ padding: '2px 0', cursor: 'pointer', fontWeight: isCurrent ? 700 : 400 }}
+                        style={{ padding: '2px 0', cursor: 'pointer', fontWeight: isCurrent ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6 }}
                         onClick={() => {
+                          setCheckoutError(null)
                           const label = r.name === 'local' ? `refs/heads/${b}` : remoteLabel
                           const map = HistorySection.__labelIndex
                           let id = map?.get(label)
@@ -195,8 +208,33 @@ export default function HistorySection({ repoName }) {
                           if (id) setSelectedId(id)
                         }}
                       >
-                        {b}
+                        <span>{b}</span>
                         {isCurrent && <span className="commit-label" style={{ marginLeft: 6 }}>current</span>}
+                        <button
+                          type="button"
+                          className="view-toggle__btn"
+                          style={{ marginLeft: 'auto' }}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            setCheckoutError(null)
+                            setSwitchingKey(key)
+                            try {
+                              const resp = await gql(M_CHECKOUT_BRANCH, { name: repoName, branch: b, remote: r.name === 'local' ? null : r.name }, 'CheckoutBranch')
+                              if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to switch branch')
+                              const data = resp.data?.checkoutBranch
+                              if (!data?.ok) throw new Error(data?.error || 'Failed to switch branch')
+                              await refreshRemotesAndHistory({ selectHead: true })
+                              setCheckoutError(null)
+                            } catch (err) {
+                              setCheckoutError(err?.message || 'Failed to switch branch')
+                            } finally {
+                              setSwitchingKey((prev) => (prev === key ? null : prev))
+                            }
+                          }}
+                          disabled={isSwitching}
+                        >
+                          {isSwitching ? 'Switching…' : 'Switch'}
+                        </button>
                       </li>
                       )
                     })}
@@ -304,7 +342,7 @@ function CommitDetail({ detail }) {
       )}
       {Array.isArray(d.files) && (
         <div style={{ marginTop: 8, minHeight: 0 }}>
-          <StatusFilesSection title="Files" files={d.files} />
+          <StatusFilesSection title="Files" files={d.files} defaultViewKey={'prefs:fileStatusDefaultView'} />
         </div>
       )}
     </div>
