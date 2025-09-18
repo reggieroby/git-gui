@@ -142,6 +142,7 @@ export default function HistorySection({ repoName }) {
               }
             }
             const headRow = (rows || []).find(r => Array.isArray(r.labels) && r.labels.includes('HEAD'))
+            const headCommitId = headRow?.id || null
             if (headRow && Array.isArray(headRow.labels)) {
               for (const lab of headRow.labels) {
                 if (typeof lab !== 'string') continue
@@ -159,6 +160,7 @@ export default function HistorySection({ repoName }) {
             HistorySection.__activeUpstream = upstreamShort
             HistorySection.__activeUpstreamRef = upstreamRef
             HistorySection.__labelIndex = labelToId
+            HistorySection.__headCommitId = headCommitId
             return null
           })()}
           {remotesLoading ? (
@@ -185,12 +187,9 @@ export default function HistorySection({ repoName }) {
                     {(r.branches || []).map((b) => {
                       const key = `${r.name}:${b}`
                       const remoteLabel = `refs/remotes/${r.name}/${b}`
-                      const upstreamShort = HistorySection.__activeUpstream
-                      const upstreamRef = HistorySection.__activeUpstreamRef
-                      const isTracking = r.name !== 'local' && upstreamShort && (upstreamShort === `${r.name}/${b}` || upstreamRef === remoteLabel)
                       const isCurrent = r.name === 'local'
                         ? (HistorySection.__activeLocal && b === HistorySection.__activeLocal)
-                        : (HistorySection.__activeRemoteRefs?.has(remoteLabel) || isTracking)
+                        : (HistorySection.__labelIndex?.get(remoteLabel) === HistorySection.__headCommitId)
                       const isSwitching = switchingKey === key
                       return (
                       <li
