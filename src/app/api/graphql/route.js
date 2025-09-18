@@ -3,89 +3,225 @@ import { getLocalRepository, listLocalRepositories } from '@/lib/repos'
 import { execFile as _execFile } from 'child_process'
 import { promisify } from 'util'
 import { stat } from 'fs/promises'
+import {
+  GraphQLSchema,
+  GraphQLObjectType,
+  GraphQLString,
+  GraphQLInt,
+  GraphQLBoolean,
+  GraphQLList,
+  GraphQLNonNull,
+  GraphQLScalarType,
+  GraphQLID,
+  execute,
+  parse
+} from 'graphql'
 
 const execFile = promisify(_execFile)
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+// Code-first GraphQL schema (graphql-js)
+const JSONScalar = new GraphQLScalarType({
+  name: 'JSON',
+  serialize: (v) => v,
+  parseValue: (v) => v,
+  parseLiteral: (ast) => null // not used in server-only ops
+})
+
+const PersonType = new GraphQLObjectType({
+  name: 'Person',
+  fields: {
+    name: { type: GraphQLString },
+    email: { type: GraphQLString },
+    date: { type: GraphQLString }
+  }
+})
+
+const CommitRowType = new GraphQLObjectType({
+  name: 'CommitRow',
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLID) },
+    short: { type: new GraphQLNonNull(GraphQLString) },
+    lane: { type: new GraphQLNonNull(GraphQLInt) },
+    parents: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) },
+    parentLanes: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLInt))) },
+    labels: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) },
+    message: { type: GraphQLString },
+    authorName: { type: GraphQLString },
+    authorEmail: { type: GraphQLString },
+    authorDate: { type: GraphQLString }
+  }
+})
+
+const HistoryResultType = new GraphQLObjectType({
+  name: 'HistoryResult',
+  fields: {
+    commits: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(CommitRowType))) },
+    maxLanes: { type: new GraphQLNonNull(GraphQLInt) }
+  }
+})
+
+const RemoteType = new GraphQLObjectType({
+  name: 'Remote',
+  fields: {
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    url: { type: GraphQLString },
+    branches: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) }
+  }
+})
+
+const StatusType = new GraphQLObjectType({
+  name: 'Status',
+  fields: {
+    staged: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) },
+    unstaged: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) }
+  }
+})
+
+const DiffType = new GraphQLObjectType({
+  name: 'Diff',
+  fields: {
+    path: { type: new GraphQLNonNull(GraphQLString) },
+    staged: { type: new GraphQLNonNull(GraphQLBoolean) },
+    text: { type: new GraphQLNonNull(GraphQLString) }
+  }
+})
+
+const CommitType = new GraphQLObjectType({
+  name: 'Commit',
+  fields: {
+    id: { type: new GraphQLNonNull(GraphQLID) },
+    short: { type: new GraphQLNonNull(GraphQLString) },
+    subject: { type: GraphQLString },
+    body: { type: GraphQLString },
+    author: { type: new GraphQLNonNull(PersonType) },
+    committer: { type: new GraphQLNonNull(PersonType) },
+    parents: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) },
+    files: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) }
+  }
+})
+
+const RepositoryType = new GraphQLObjectType({
+  name: 'Repository',
+  fields: {
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    path: { type: new GraphQLNonNull(GraphQLString) }
+  }
+})
+
+const GlobalConfigType = new GraphQLObjectType({
+  name: 'GlobalConfig',
+  fields: { email: { type: GraphQLString }, name: { type: GraphQLString } }
+})
+const RepoConfigType = new GraphQLObjectType({
+  name: 'RepoConfig',
+  fields: { email: { type: GraphQLString }, name: { type: GraphQLString } }
+})
+
+const OkType = new GraphQLObjectType({ name: 'Ok', fields: { ok: { type: new GraphQLNonNull(GraphQLBoolean) } } })
+const CreateBranchResultType = new GraphQLObjectType({
+  name: 'CreateBranchResult',
+  fields: {
+    ok: { type: new GraphQLNonNull(GraphQLBoolean) },
+    created: { type: new GraphQLNonNull(GraphQLBoolean) },
+    pushed: { type: new GraphQLNonNull(GraphQLBoolean) },
+    pushError: { type: GraphQLString }
+  }
+})
+
+const QueryType = new GraphQLObjectType({
+  name: 'Query',
+  fields: {
+    history: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) }, limit: { type: GraphQLInt } },
+      type: new GraphQLNonNull(HistoryResultType),
+      resolve: (_src, args) => history(args)
+    },
+    remotes: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) } },
+      type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(RemoteType))),
+      resolve: (_src, args) => remotes(args)
+    },
+    status: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) } },
+      type: new GraphQLNonNull(StatusType),
+      resolve: (_src, args) => status(args)
+    },
+    commit: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) }, id: { type: new GraphQLNonNull(GraphQLID) } },
+      type: new GraphQLNonNull(CommitType),
+      resolve: (_src, args) => commit(args)
+    },
+    repositories: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(RepositoryType))), resolve: () => repositories() },
+    settings: { type: JSONScalar, resolve: () => settings() },
+    diff: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) }, path: { type: new GraphQLNonNull(GraphQLString) }, staged: { type: GraphQLBoolean } },
+      type: new GraphQLNonNull(DiffType),
+      resolve: (_src, args) => diff(args)
+    },
+    globalConfig: { type: new GraphQLNonNull(GlobalConfigType), resolve: () => globalConfig() },
+    repoConfig: { args: { name: { type: new GraphQLNonNull(GraphQLString) } }, type: new GraphQLNonNull(RepoConfigType), resolve: (_src, args) => repoConfig(args) }
+  }
+})
+
+const MutationType = new GraphQLObjectType({
+  name: 'Mutation',
+  fields: {
+    createBranch: {
+      args: {
+        name: { type: new GraphQLNonNull(GraphQLString) },
+        remote: { type: new GraphQLNonNull(GraphQLString) },
+        branch: { type: new GraphQLNonNull(GraphQLString) },
+        from: { type: GraphQLString }
+      },
+      type: new GraphQLNonNull(CreateBranchResultType),
+      resolve: (_src, args) => createBranch(args)
+    },
+    stage: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) }, action: { type: new GraphQLNonNull(GraphQLString) }, paths: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) } },
+      type: new GraphQLNonNull(OkType),
+      resolve: (_src, args) => stage(args)
+    },
+    commitCreate: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) }, message: { type: new GraphQLNonNull(GraphQLString) } },
+      type: new GraphQLNonNull(OkType),
+      resolve: (_src, args) => commitCreate(args)
+    },
+    setSetting: {
+      args: { key: { type: new GraphQLNonNull(GraphQLString) }, value: { type: GraphQLString } },
+      type: new GraphQLObjectType({ name: 'SetSettingResult', fields: { ok: { type: new GraphQLNonNull(GraphQLBoolean) }, key: { type: new GraphQLNonNull(GraphQLString) }, value: { type: GraphQLString } } }),
+      resolve: async (_src, args) => setSetting(args)
+    },
+    setGlobalConfig: {
+      args: { email: { type: GraphQLString }, name: { type: GraphQLString } },
+      type: new GraphQLNonNull(GlobalConfigType),
+      resolve: (_src, args) => setGlobalConfig(args)
+    },
+    setRepoConfig: {
+      args: { name: { type: new GraphQLNonNull(GraphQLString) }, email: { type: GraphQLString }, userName: { type: GraphQLString } },
+      type: new GraphQLNonNull(RepoConfigType),
+      resolve: (_src, args) => setRepoConfig(args)
+    }
+  }
+})
+
+const schema = new GraphQLSchema({ query: QueryType, mutation: MutationType })
+
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
-    const op = body.operationName || inferOperation(body.query)
-    const vars = body.variables || {}
-    switch (op) {
-      case 'RepoHistory':
-      case 'history':
-        return NextResponse.json({ data: { history: await history(vars) } })
-      case 'RepoRemotes':
-      case 'remotes':
-        return NextResponse.json({ data: { remotes: await remotes(vars) } })
-      case 'Commit':
-      case 'commit':
-        return NextResponse.json({ data: { commit: await commit(vars) } })
-      case 'Settings':
-      case 'settings':
-        return NextResponse.json({ data: { settings: await settings() } })
-      case 'SetSetting':
-      case 'setSetting':
-        return NextResponse.json({ data: { setSetting: await setSetting(vars) } })
-      case 'Diff':
-      case 'diff':
-        return NextResponse.json({ data: { diff: await diff(vars) } })
-      case 'Repositories':
-      case 'repositories':
-        return NextResponse.json({ data: { repositories: await repositories() } })
-      case 'GlobalConfig':
-      case 'globalConfig':
-        return NextResponse.json({ data: { globalConfig: await globalConfig() } })
-      case 'SetGlobalConfig':
-      case 'setGlobalConfig':
-        return NextResponse.json({ data: { setGlobalConfig: await setGlobalConfig(vars) } })
-      case 'RepoConfig':
-      case 'repoConfig':
-        return NextResponse.json({ data: { repoConfig: await repoConfig(vars) } })
-      case 'SetRepoConfig':
-      case 'setRepoConfig':
-        return NextResponse.json({ data: { setRepoConfig: await setRepoConfig(vars) } })
-      case 'CreateBranch':
-      case 'createBranch':
-        return NextResponse.json({ data: { createBranch: await createBranch(vars) } })
-      case 'Status':
-      case 'status':
-        return NextResponse.json({ data: { status: await status(vars) } })
-      case 'Stage':
-      case 'stage':
-        return NextResponse.json({ data: { stage: await stage(vars) } })
-      case 'CommitCreate':
-      case 'commitCreate':
-        return NextResponse.json({ data: { commitCreate: await commitCreate(vars) } })
-      default:
-        return NextResponse.json({ errors: [{ message: `Unknown operation: ${op || 'undefined'}` }] }, { status: 400 })
-    }
+    const query = body.query || ''
+    const variables = body.variables || {}
+    const operationName = body.operationName || null
+    const document = parse(query)
+    const result = await execute({ schema, document, variableValues: variables, operationName })
+    const status = result.errors ? 400 : 200
+    return NextResponse.json(result, { status })
   } catch (error) {
     return NextResponse.json({ errors: [{ message: error?.message || 'Unknown error' }] }, { status: 500 })
   }
-}
-
-function inferOperation(q) {
-  if (typeof q !== 'string') return null
-  if (/\bhistory\s*\(/.test(q)) return 'history'
-  if (/\bremotes\s*\(/.test(q)) return 'remotes'
-  if (/\bcommit\s*\(/.test(q)) return 'commit'
-  if (/\bcreateBranch\s*\(/.test(q)) return 'createBranch'
-  if (/\bstatus\s*\(/.test(q)) return 'status'
-  if (/\bstage\s*\(/.test(q)) return 'stage'
-  if (/\bcommitCreate\s*\(/.test(q)) return 'commitCreate'
-  if (/\bsettings\s*\(/.test(q)) return 'settings'
-  if (/\bsetSetting\s*\(/.test(q)) return 'setSetting'
-  if (/\bdiff\s*\(/.test(q)) return 'diff'
-  if (/\brepositories\s*\(/.test(q)) return 'repositories'
-  if (/\bglobalConfig\s*\(/.test(q)) return 'globalConfig'
-  if (/\bsetGlobalConfig\s*\(/.test(q)) return 'setGlobalConfig'
-  if (/\brepoConfig\s*\(/.test(q)) return 'repoConfig'
-  if (/\bsetRepoConfig\s*\(/.test(q)) return 'setRepoConfig'
-  return null
 }
 
 async function isGitRepository(repoPath) {
