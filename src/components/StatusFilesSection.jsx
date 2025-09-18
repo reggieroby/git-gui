@@ -9,7 +9,6 @@ export default function StatusFilesSection({
   title,
   files,
   viewKey,
-  defaultViewKey,
   repoName,
   statusMode,
   usePreferences,
@@ -27,6 +26,7 @@ export default function StatusFilesSection({
   const [loadingDiff, setLoadingDiff] = useState(false)
   const [diffError, setDiffError] = useState(null)
 
+  // Persist view if a key is provided (optional); currently unused by callers
   useEffect(() => {
     try {
       if (viewKey && typeof window !== 'undefined') window.localStorage.setItem(viewKey, view)

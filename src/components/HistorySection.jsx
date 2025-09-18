@@ -1,7 +1,6 @@
 "use client"
 import { useEffect, useState } from 'react'
 import CommitGraph from '@/components/CommitGraph'
-import { useMemo } from 'react'
 import gql from '@/lib/gql'
 import { Q_HISTORY, Q_REMOTES, Q_COMMIT, M_CREATE_BRANCH } from '@/lib/queries'
 import StatusFilesSection from '@/components/StatusFilesSection'
@@ -16,6 +15,8 @@ export default function HistorySection({ repoName }) {
   const [remotes, setRemotes] = useState([])
   const [remotesLoading, setRemotesLoading] = useState(false)
   const [remotesError, setRemotesError] = useState(null)
+  const [headBranch, setHeadBranch] = useState(null)
+  const [headUpstream, setHeadUpstream] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -30,6 +31,8 @@ export default function HistorySection({ repoName }) {
           const commits = Array.isArray(data.commits) ? data.commits : []
           setRows(commits)
           setLanes(typeof data.maxLanes === 'number' ? data.maxLanes : 1)
+          setHeadBranch(typeof data.headBranch === 'string' && data.headBranch ? data.headBranch : null)
+          setHeadUpstream(typeof data.headUpstream === 'string' && data.headUpstream ? data.headUpstream : null)
           if (commits.length) setSelectedId(commits[0].id || undefined)
         }
       } catch (e) {
@@ -87,6 +90,48 @@ export default function HistorySection({ repoName }) {
     <div style={{ height: '100%', minHeight: 0, display: 'grid', gridTemplateColumns: '260px 1fr 360px', gap: 16 }}>
       <aside style={{ borderRight: '1px solid #e5e7eb', paddingRight: 12, overflow: 'auto', minHeight: 0 }}>
           <h3 style={{ marginTop: 0, marginBottom: 8 }}>Remotes</h3>
+          {(() => {
+            // Determine active local branch (HEAD -> refs/heads/<branch>) and any remote head on the same commit
+            let activeLocal = null
+            const activeRemoteRefs = new Set()
+            const labelToId = new Map()
+            for (const row of rows || []) {
+              if (!Array.isArray(row?.labels)) continue
+              for (const lab of row.labels) {
+                if (typeof lab !== 'string') continue
+                labelToId.set(lab, row.id)
+                if (lab.startsWith('refs/remotes/')) {
+                  const rest = lab.slice('refs/remotes/'.length)
+                  if (rest) labelToId.set(rest, row.id)
+                } else if (lab.startsWith('refs/heads/')) {
+                  const rest = lab.slice('refs/heads/'.length)
+                  if (rest) {
+                    labelToId.set(`local/${rest}`, row.id)
+                    labelToId.set(rest, row.id)
+                  }
+                }
+              }
+            }
+            const headRow = (rows || []).find(r => Array.isArray(r.labels) && r.labels.includes('HEAD'))
+            if (headRow && Array.isArray(headRow.labels)) {
+              for (const lab of headRow.labels) {
+                if (typeof lab !== 'string') continue
+                if (lab.startsWith('refs/heads/')) activeLocal = lab.slice('refs/heads/'.length)
+                else if (lab.startsWith('refs/remotes/')) activeRemoteRefs.add(lab)
+              }
+            }
+            // stash in closure for the list below
+            if (!activeLocal && typeof headBranch === 'string' && headBranch) activeLocal = headBranch
+            const upstreamRaw = typeof headUpstream === 'string' && headUpstream ? headUpstream : null
+            const upstreamShort = upstreamRaw?.startsWith('refs/remotes/') ? upstreamRaw.slice('refs/remotes/'.length) : upstreamRaw
+            const upstreamRef = upstreamRaw?.startsWith('refs/remotes/') ? upstreamRaw : (upstreamRaw ? `refs/remotes/${upstreamRaw}` : null)
+            HistorySection.__activeLocal = activeLocal
+            HistorySection.__activeRemoteRefs = activeRemoteRefs
+            HistorySection.__activeUpstream = upstreamShort
+            HistorySection.__activeUpstreamRef = upstreamRef
+            HistorySection.__labelIndex = labelToId
+            return null
+          })()}
           {remotesLoading ? (
             <div style={{ opacity: 0.7 }}>Loading…</div>
           ) : remotesError ? (
@@ -114,7 +159,11 @@ export default function HistorySection({ repoName }) {
                             const resp2 = await gql(Q_HISTORY, { name: repoName, limit: 200 }, 'RepoHistory')
                             if (!resp2.errors) {
                               const commits = Array.isArray(resp2.data?.history?.commits) ? resp2.data.history.commits : []
-                              setRows(commits); setLanes(Number(resp2.data?.history?.maxLanes) || 1)
+                              setRows(commits)
+                              setLanes(Number(resp2.data?.history?.maxLanes) || 1)
+                              const hist = resp2.data?.history || {}
+                              setHeadBranch(typeof hist.headBranch === 'string' && hist.headBranch ? hist.headBranch : null)
+                              setHeadUpstream(typeof hist.headUpstream === 'string' && hist.headUpstream ? hist.headUpstream : null)
                             }
                           } catch {}
                         })()
@@ -122,20 +171,35 @@ export default function HistorySection({ repoName }) {
                     />
                   )}
                   <ul style={{ listStyle: 'none', paddingLeft: 0, margin: '4px 0 0 0' }}>
-                    {(r.branches || []).map((b) => (
+                    {(r.branches || []).map((b) => {
+                      const remoteLabel = `refs/remotes/${r.name}/${b}`
+                      const upstreamShort = HistorySection.__activeUpstream
+                      const upstreamRef = HistorySection.__activeUpstreamRef
+                      const isTracking = r.name !== 'local' && upstreamShort && (upstreamShort === `${r.name}/${b}` || upstreamRef === remoteLabel)
+                      const isCurrent = r.name === 'local'
+                        ? (HistorySection.__activeLocal && b === HistorySection.__activeLocal)
+                        : (HistorySection.__activeRemoteRefs?.has(remoteLabel) || isTracking)
+                      return (
                       <li
                         key={r.name + ':' + b}
                         className="tree__label"
-                        style={{ padding: '2px 0', cursor: 'pointer' }}
+                        style={{ padding: '2px 0', cursor: 'pointer', fontWeight: isCurrent ? 700 : 400 }}
                         onClick={() => {
-                          const label = r.name === 'local' ? `local/${b}` : `${r.name}/${b}`
-                          const match = (rows || []).find(rr => Array.isArray(rr.labels) && rr.labels.includes(label))
-                          if (match?.id) setSelectedId(match.id)
+                          const label = r.name === 'local' ? `refs/heads/${b}` : remoteLabel
+                          const map = HistorySection.__labelIndex
+                          let id = map?.get(label)
+                          if (!id) {
+                            const fallback = r.name === 'local' ? `local/${b}` : `${r.name}/${b}`
+                            id = map?.get(fallback) || map?.get(b)
+                          }
+                          if (id) setSelectedId(id)
                         }}
                       >
                         {b}
+                        {isCurrent && <span className="commit-label" style={{ marginLeft: 6 }}>current</span>}
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 </div>
               ))}
@@ -240,7 +304,7 @@ function CommitDetail({ detail }) {
       )}
       {Array.isArray(d.files) && (
         <div style={{ marginTop: 8, minHeight: 0 }}>
-          <StatusFilesSection title="Files" files={d.files} defaultViewKey={'prefs:fileStatusDefaultView'} />
+          <StatusFilesSection title="Files" files={d.files} />
         </div>
       )}
     </div>

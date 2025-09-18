@@ -1,7 +1,6 @@
 "use client"
+import { useState, useEffect } from 'react'
 import RepoSidebar from '@/components/RepoSidebar'
-import TreeView from '@/components/TreeView'
-import GroupedListView from '@/components/GroupedListView'
 import StatusFilesSection from '@/components/StatusFilesSection'
 import gql from '@/lib/gql'
 import { Q_STATUS, M_STAGE, M_COMMIT } from '@/lib/queries'
@@ -38,7 +37,7 @@ export default function RepoView({ repo, selectedFromRoute }) {
     async function load() {
       try {
         await fetchStatus()
-      } catch {}
+      } catch { }
     }
     load()
     // Load saved section for this repo from localStorage if no route override
@@ -50,7 +49,7 @@ export default function RepoView({ repo, selectedFromRoute }) {
         if (saved && valid.includes(saved)) {
           setSelected(saved)
         }
-      } catch {}
+      } catch { }
     } else {
       setSelected(selectedFromRoute)
     }
@@ -64,7 +63,7 @@ export default function RepoView({ repo, selectedFromRoute }) {
     try {
       const key = `repo:${repo.name}:section`
       if (typeof window !== 'undefined') window.localStorage.setItem(key, selected)
-    } catch {}
+    } catch { }
   }, [repo.name, selected])
 
   // Keep selected in sync with route changes
@@ -113,47 +112,11 @@ export default function RepoView({ repo, selectedFromRoute }) {
   )
 }
 
-import { useState, useEffect } from 'react'
-
-function Header({ name, branch, path }) {
-  return (
-    <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '0.75rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <h1 style={{ margin: 0 }}>{name}</h1>
-        <span
-          title={branch ?? 'unknown'}
-          style={{
-            whiteSpace: 'nowrap',
-            fontSize: '0.85rem',
-            border: '1px solid #e0e7ff',
-            background: '#eef2ff',
-            color: '#3730a3',
-            padding: '0.2rem 0.6rem',
-            borderRadius: 999
-          }}
-        >
-          {branch ?? 'unknown'}
-        </span>
-      </div>
-      <div style={{ opacity: 0.8 }}>
-        <div style={{ fontSize: '0.9rem' }}>
-          Path: <code>{path}</code>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCommitDone, mutating }) {
   const { staged, unstaged, loading, error } = useRepoStatusContext()
   const [stagedView, setStagedView] = useState('tree')
   const [unstagedView, setUnstagedView] = useState('tree')
-  const [stagedExpandSig, setStagedExpandSig] = useState(0)
-  const [stagedCollapseSig, setStagedCollapseSig] = useState(0)
-  const [unstagedExpandSig, setUnstagedExpandSig] = useState(0)
-  const [unstagedCollapseSig, setUnstagedCollapseSig] = useState(0)
-  const [stagedExpandedPaths, setStagedExpandedPaths] = useState(() => new Set())
-  const [unstagedExpandedPaths, setUnstagedExpandedPaths] = useState(() => new Set())
 
   // Load saved view preferences per repo on mount
   useEffect(() => {
@@ -164,7 +127,7 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
       const v2 = (typeof window !== 'undefined' && window.localStorage.getItem(k2))
       if (v1 === 'list' || v1 === 'tree') setStagedView(v1)
       if (v2 === 'list' || v2 === 'tree') setUnstagedView(v2)
-    } catch {}
+    } catch { }
   }, [repoName])
 
   // Persist when preferences change
@@ -174,7 +137,7 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
         window.localStorage.setItem(`repo:${repoName}:view:staged`, stagedView)
         window.localStorage.setItem(`repo:${repoName}:view:unstaged`, unstagedView)
       }
-    } catch {}
+    } catch { }
   }, [repoName, stagedView, unstagedView])
   if (selected === 'file-status') {
     return (
@@ -316,4 +279,4 @@ function CommitRow({ repoName, hasStaged, onCommitted }) {
 
 // gql helper centralized in src/lib/gql
 
- 
+

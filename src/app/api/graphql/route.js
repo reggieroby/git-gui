@@ -3,6 +3,7 @@ import { getLocalRepository, listLocalRepositories } from '@/lib/repos'
 import { execFile as _execFile } from 'child_process'
 import { promisify } from 'util'
 import { stat } from 'fs/promises'
+import { ruruHTML } from 'ruru/server'
 import {
   GraphQLSchema,
   GraphQLObjectType,
@@ -21,6 +22,13 @@ const execFile = promisify(_execFile)
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// Serve GraphiQL UI on GET for convenience
+export async function GET(req) {
+  console.log('Serving GraphiQL UI')
+  const html = ruruHTML({ endpoint: '/api/graphql' })
+  return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+}
 
 // Code-first GraphQL schema (graphql-js)
 const JSONScalar = new GraphQLScalarType({
@@ -59,7 +67,9 @@ const HistoryResultType = new GraphQLObjectType({
   name: 'HistoryResult',
   fields: {
     commits: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(CommitRowType))) },
-    maxLanes: { type: new GraphQLNonNull(GraphQLInt) }
+    maxLanes: { type: new GraphQLNonNull(GraphQLInt) },
+    headBranch: { type: GraphQLString },
+    headUpstream: { type: GraphQLString }
   }
 })
 
@@ -247,6 +257,20 @@ async function history({ name, limit = 200 }) {
   const commits = parseLog(stdout)
   const { rows, maxLanes } = assignLanes(commits)
   const labelsById = new Map()
+  let headBranch = null
+  let headUpstream = null
+  try {
+    const { stdout: branchOut } = await execFile(gitBin, ['-C', repo.path, 'rev-parse', '--abbrev-ref', 'HEAD'])
+    const branchName = branchOut.toString().trim()
+    if (branchName && branchName !== 'HEAD') headBranch = branchName
+  } catch {}
+  if (headBranch) {
+    try {
+      const { stdout: upstreamOut } = await execFile(gitBin, ['-C', repo.path, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])
+      const upstreamRef = upstreamOut.toString().trim()
+      if (upstreamRef && upstreamRef !== '@{u}') headUpstream = upstreamRef
+    } catch {}
+  }
   // remote heads
   try {
     const { stdout: refsOut } = await execFile(gitBin, ['-C', repo.path, 'for-each-ref', 'refs/remotes/', '--format=%(refname:short)%00%(objectname)', '-z'])
@@ -257,10 +281,10 @@ async function history({ name, limit = 200 }) {
       if (!ref || !obj) continue
       if (/\/HEAD$/.test(ref)) continue
       const arr = labelsById.get(obj) || []
-      arr.push(ref)
+      arr.push(`refs/remotes/${ref}`)
       labelsById.set(obj, arr)
     }
-  } catch {}
+  } catch { }
   // local heads
   try {
     const { stdout: headsOut } = await execFile(gitBin, ['-C', repo.path, 'for-each-ref', 'refs/heads/', '--format=%(refname:short)%00%(objectname)', '-z'])
@@ -270,10 +294,10 @@ async function history({ name, limit = 200 }) {
       const obj = (parts[i + 1] || '').trim()
       if (!br || !obj) continue
       const arr = labelsById.get(obj) || []
-      arr.push(`local/${br}`)
+      arr.push(`refs/heads/${br}`)
       labelsById.set(obj, arr)
     }
-  } catch {}
+  } catch { }
   // HEAD
   try {
     const { stdout: headCommitOut } = await execFile(gitBin, ['-C', repo.path, 'rev-parse', 'HEAD'])
@@ -283,7 +307,7 @@ async function history({ name, limit = 200 }) {
       arr.push('HEAD')
       labelsById.set(headCommit, arr)
     }
-  } catch {}
+  } catch { }
   return {
     commits: rows.map(r => ({
       id: r.id,
@@ -297,7 +321,9 @@ async function history({ name, limit = 200 }) {
       authorEmail: r.authorEmail,
       authorDate: r.authorDate
     })),
-    maxLanes
+    maxLanes,
+    headBranch,
+    headUpstream
   }
 }
 
@@ -342,7 +368,7 @@ async function commit({ name, id }) {
   const repo = await getLocalRepository(repoName)
   if (!repo) throw new Error('Repository not found')
   const gitBin = process.env.GIT_BIN || 'git'
-  const fmt = ['%H','%h','%P','%T','%s','%f','%an','%ae','%aI','%cn','%ce','%cI'].join('%x00')
+  const fmt = ['%H', '%h', '%P', '%T', '%s', '%f', '%an', '%ae', '%aI', '%cn', '%ce', '%cI'].join('%x00')
   const { stdout } = await execFile(gitBin, ['-C', repo.path, 'show', '--quiet', '--no-patch', `--pretty=format:${fmt}`, commitId])
   const parts = stdout.toString().split('\u0000')
   const [full, short, parentsStr, tree, subject, subjectSlug, an, ae, aI, cn, ce, cI] = parts
@@ -520,7 +546,7 @@ async function readGlobalConfig(cmd) {
 async function writeGlobalConfig(gitBin, key, value) {
   if (value == null) return
   const args = ['config', '--global']
-  if (value.trim() === '') await execFile(gitBin, [...args, '--unset', key]).catch(() => {})
+  if (value.trim() === '') await execFile(gitBin, [...args, '--unset', key]).catch(() => { })
   else await execFile(gitBin, [...args, key, value])
 }
 async function readRepoConfig(gitBin, repoPath, key) {
@@ -528,7 +554,7 @@ async function readRepoConfig(gitBin, repoPath, key) {
 }
 async function writeRepoConfig(gitBin, repoPath, key, value) {
   if (value == null) return
-  if (value.trim() === '') await execFile(gitBin, ['-C', repoPath, 'config', '--unset', key]).catch(() => {})
+  if (value.trim() === '') await execFile(gitBin, ['-C', repoPath, 'config', '--unset', key]).catch(() => { })
   else await execFile(gitBin, ['-C', repoPath, 'config', key, value])
 }
 

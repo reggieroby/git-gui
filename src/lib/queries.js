@@ -1,4 +1,4 @@
-export const Q_HISTORY = `query RepoHistory($name:String!,$limit:Int){ history(name:$name, limit:$limit){ commits { id short lane parents parentLanes labels message authorName authorEmail authorDate } maxLanes } }`
+export const Q_HISTORY = `query RepoHistory($name:String!,$limit:Int){ history(name:$name, limit:$limit){ commits { id short lane parents parentLanes labels message authorName authorEmail authorDate } maxLanes headBranch headUpstream } }`
 export const Q_REMOTES = `query RepoRemotes($name:String!){ remotes(name:$name){ name url branches } }`
 export const Q_COMMIT = `query Commit($name:String!,$id:String!){ commit(name:$name, id:$id){ id short subject body author{ name email date } committer{ name email date } parents files } }`
 export const M_CREATE_BRANCH = `mutation CreateBranch($name:String!,$remote:String!,$branch:String!){ createBranch(name:$name, remote:$remote, branch:$branch){ ok created pushed pushError } }`

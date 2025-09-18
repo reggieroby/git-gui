@@ -1,22 +1,49 @@
 "use client"
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 
 export default function CommitGraph({ rows, maxLanes, selectedId, onSelect }) {
   const lanes = Math.max(1, Number(maxLanes) || 1)
   const prepared = useMemo(() => prepareRows(rows, lanes), [rows, lanes])
+  const rowRefs = useRef(new Map())
+
+  useEffect(() => () => { rowRefs.current.clear() }, [])
+
+  useEffect(() => {
+    if (!selectedId) return
+    const el = rowRefs.current.get(selectedId)
+    if (!el) return
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [selectedId])
   return (
     <div className="commit-graph" style={{ height: '100%', minHeight: 0, overflow: 'auto' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 10, padding: '8px 4px' }}>
         {prepared.map((r) => (
           <React.Fragment key={r.id}>
-            <div key={r.id + ':graph'} className={`commit-graph__row ${selectedId === r.id ? 'is-selected' : ''}`} onClick={() => onSelect && onSelect(r)} style={{ display: 'grid', gridTemplateColumns: `repeat(${lanes}, 12px)`, gap: 0 }}>
+            <div
+              key={r.id + ':graph'}
+              className={`commit-graph__row ${selectedId === r.id ? 'is-selected' : ''}`}
+              onClick={() => onSelect && onSelect(r)}
+              style={{ display: 'grid', gridTemplateColumns: `repeat(${lanes}, 12px)`, gap: 0 }}
+              ref={(el) => {
+                if (!el) { rowRefs.current.delete(r.id); return }
+                rowRefs.current.set(r.id, el)
+              }}
+            >
               {r.cells.map((cell, idx) => (
                 <div key={r.id + ':' + idx} className={`commit-graph__cell${cell.node ? ' is-node' : ''}${cell.conn ? ' is-connector' : ''}${cell.h ? ' has-hline' : ''}`} />
               ))}
             </div>
-            <div key={r.id + ':text'} className={`commit-graph__row ${selectedId === r.id ? 'is-selected' : ''}`} onClick={() => onSelect && onSelect(r)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              key={r.id + ':text'}
+              className={`commit-graph__row ${selectedId === r.id ? 'is-selected' : ''}`}
+              onClick={() => onSelect && onSelect(r)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              ref={(el) => {
+                if (!el) { rowRefs.current.delete(r.id); return }
+                rowRefs.current.set(r.id, el)
+              }}
+            >
               <code className="tree__label">{r.short}</code>
-              <span className="commit-label">hello</span>
               {r.labels.map((l) => (
                 <span key={r.id + ':' + l} className="commit-label">{formatRemoteLabel(l)}</span>
               ))}
@@ -51,26 +78,19 @@ function prepareRows(rows, lanes) {
 
 function formatRemoteLabel(l) {
   const s = String(l || '')
-  // Expect "remote/branch"; render as "[remote]/[branch]"
+  if (s === 'HEAD') return 'HEAD'
+  if (s.startsWith('refs/heads/')) return `[local]/[${s.slice('refs/heads/'.length)}]`
+  if (s.startsWith('refs/remotes/')) {
+    const rest = s.slice('refs/remotes/'.length)
+    const idx = rest.indexOf('/')
+    if (idx === -1) return `[remote]/[${rest}]`
+    const remote = rest.slice(0, idx)
+    const branch = rest.slice(idx + 1)
+    return `[${remote}]/[${branch}]`
+  }
   const idx = s.indexOf('/')
   if (idx === -1) return `[${s}]`
   const remote = s.slice(0, idx)
   const branch = s.slice(idx + 1)
   return `[${remote}]/[${branch}]`
-}
-
-
-function formatMeta(name, email, dateIso) {
-  const parts = []
-  const who = [name || '', email ? `<${email}>` : ''].filter(Boolean).join(' ')
-  if (who) parts.push(who)
-  if (dateIso) {
-    try {
-      const d = new Date(dateIso)
-      parts.push(d.toLocaleString())
-    } catch {
-      parts.push(dateIso)
-    }
-  }
-  return parts.join(' • ')
 }
