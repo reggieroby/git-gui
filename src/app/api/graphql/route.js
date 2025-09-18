@@ -147,6 +147,13 @@ const CheckoutBranchResultType = new GraphQLObjectType({
     error: { type: GraphQLString }
   }
 })
+const DeleteBranchResultType = new GraphQLObjectType({
+  name: 'DeleteBranchResult',
+  fields: {
+    ok: { type: new GraphQLNonNull(GraphQLBoolean) },
+    error: { type: GraphQLString }
+  }
+})
 
 const QueryType = new GraphQLObjectType({
   name: 'Query',
@@ -204,6 +211,15 @@ const MutationType = new GraphQLObjectType({
       },
       type: new GraphQLNonNull(CheckoutBranchResultType),
       resolve: (_src, args) => checkoutBranch(args)
+    },
+    deleteBranch: {
+      args: {
+        name: { type: new GraphQLNonNull(GraphQLString) },
+        remote: { type: GraphQLString },
+        branch: { type: new GraphQLNonNull(GraphQLString) }
+      },
+      type: new GraphQLNonNull(DeleteBranchResultType),
+      resolve: (_src, args) => deleteBranch(args)
     },
     stage: {
       args: { name: { type: new GraphQLNonNull(GraphQLString) }, action: { type: new GraphQLNonNull(GraphQLString) }, paths: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) } },
@@ -460,6 +476,34 @@ async function checkoutBranch({ name, remote = 'local', branch }) {
   } catch (error) {
     const stderr = error?.stderr ? error.stderr.toString().trim() : null
     return { ok: false, error: stderr || error?.message || 'Failed to switch branch' }
+  }
+}
+
+async function deleteBranch({ name, remote = 'local', branch }) {
+  const repoName = decodeURIComponent(name)
+  const repo = await getLocalRepository(repoName)
+  if (!repo) throw new Error('Repository not found')
+  if (!(await isGitRepository(repo.path))) throw new Error('Not a Git repository')
+  const gitBin = process.env.GIT_BIN || 'git'
+  const branchName = decodeURIComponent(branch)
+  const remoteName = remote == null ? 'local' : decodeURIComponent(remote)
+  if (!branchName) throw new Error('Branch name required')
+  try {
+    if (remoteName === 'local') {
+      await execFile(gitBin, ['-C', repo.path, 'branch', '-D', branchName])
+    } else {
+      const primary = ['push', remoteName, '--delete', branchName]
+      const fallback = ['push', remoteName, `:refs/heads/${branchName}`]
+      try {
+        await execFile(gitBin, ['-C', repo.path, ...primary])
+      } catch (err) {
+        await execFile(gitBin, ['-C', repo.path, ...fallback])
+      }
+    }
+    return { ok: true, error: null }
+  } catch (error) {
+    const stderr = error?.stderr ? error.stderr.toString().trim() : null
+    return { ok: false, error: stderr || error?.message || 'Failed to delete branch' }
   }
 }
 

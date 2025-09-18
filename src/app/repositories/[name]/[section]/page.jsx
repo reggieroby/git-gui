@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic'
 const valid = ['file-status', 'history', 'branches', 'tags', 'stashes']
 
 export default async function RepoSectionPage({ params }) {
-  const name = decodeURIComponent(params.name)
-  const section = decodeURIComponent(params.section)
+  const { name: rawName, section: rawSection } = await params
+  const name = decodeURIComponent(rawName || '')
+  const section = decodeURIComponent(rawSection || '')
   if (!valid.includes(section)) return notFound()
 
   const repo = await getLocalRepository(name)

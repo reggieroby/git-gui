@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import CommitGraph from '@/components/CommitGraph'
 import gql from '@/lib/gql'
-import { Q_HISTORY, Q_REMOTES, Q_COMMIT, M_CREATE_BRANCH, M_CHECKOUT_BRANCH } from '@/lib/queries'
+import { Q_HISTORY, Q_REMOTES, Q_COMMIT, M_CREATE_BRANCH, M_CHECKOUT_BRANCH, M_DELETE_BRANCH } from '@/lib/queries'
 import StatusFilesSection from '@/components/StatusFilesSection'
 
 export default function HistorySection({ repoName }) {
@@ -18,7 +18,8 @@ export default function HistorySection({ repoName }) {
   const [headBranch, setHeadBranch] = useState(null)
   const [headUpstream, setHeadUpstream] = useState(null)
   const [switchingKey, setSwitchingKey] = useState(null)
-  const [checkoutError, setCheckoutError] = useState(null)
+  const [deletingKey, setDeletingKey] = useState(null)
+  const [branchActionError, setBranchActionError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -115,8 +116,8 @@ export default function HistorySection({ repoName }) {
     <div style={{ height: '100%', minHeight: 0, display: 'grid', gridTemplateColumns: '260px 1fr 360px', gap: 16 }}>
       <aside style={{ borderRight: '1px solid #e5e7eb', paddingRight: 12, overflow: 'auto', minHeight: 0 }}>
           <h3 style={{ marginTop: 0, marginBottom: 8 }}>Remotes</h3>
-          {checkoutError && (
-            <div style={{ color: '#b91c1c', marginBottom: 8 }}>{checkoutError}</div>
+          {branchActionError && (
+            <div style={{ color: '#b91c1c', marginBottom: 8 }}>{branchActionError}</div>
           )}
           {(() => {
             // Determine active local branch (HEAD -> refs/heads/<branch>) and any remote head on the same commit
@@ -197,7 +198,7 @@ export default function HistorySection({ repoName }) {
                         className="tree__label"
                         style={{ padding: '2px 0', cursor: 'pointer', fontWeight: isCurrent ? 700 : 400, display: 'flex', alignItems: 'center', gap: 6 }}
                         onClick={() => {
-                          setCheckoutError(null)
+                          setBranchActionError(null)
                           const label = r.name === 'local' ? `refs/heads/${b}` : remoteLabel
                           const map = HistorySection.__labelIndex
                           let id = map?.get(label)
@@ -213,10 +214,12 @@ export default function HistorySection({ repoName }) {
                         <button
                           type="button"
                           className="view-toggle__btn"
-                          style={{ marginLeft: 'auto' }}
+                          style={{ marginLeft: 'auto', padding: '2px 6px', minWidth: 0 }}
+                          aria-label={`Switch to ${r.name === 'local' ? '' : `${r.name}/`}${b}`}
+                          title={`Switch to ${r.name === 'local' ? b : `${r.name}/${b}`}`}
                           onClick={async (e) => {
                             e.stopPropagation()
-                            setCheckoutError(null)
+                            setBranchActionError(null)
                             setSwitchingKey(key)
                             try {
                               const resp = await gql(M_CHECKOUT_BRANCH, { name: repoName, branch: b, remote: r.name === 'local' ? null : r.name }, 'CheckoutBranch')
@@ -224,16 +227,43 @@ export default function HistorySection({ repoName }) {
                               const data = resp.data?.checkoutBranch
                               if (!data?.ok) throw new Error(data?.error || 'Failed to switch branch')
                               await refreshRemotesAndHistory({ selectHead: true })
-                              setCheckoutError(null)
+                              setBranchActionError(null)
                             } catch (err) {
-                              setCheckoutError(err?.message || 'Failed to switch branch')
+                              setBranchActionError(err?.message || 'Failed to switch branch')
                             } finally {
                               setSwitchingKey((prev) => (prev === key ? null : prev))
                             }
                           }}
-                          disabled={isSwitching}
+                          disabled={isSwitching || deletingKey === key}
                         >
-                          {isSwitching ? 'Switching…' : 'Switch'}
+                          <span aria-hidden="true">{isSwitching ? '…' : '⇄'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="view-toggle__btn"
+                          style={{ padding: '2px 6px', minWidth: 0 }}
+                          aria-label={`Delete ${r.name === 'local' ? '' : `${r.name}/`}${b}`}
+                          title={`Delete ${r.name === 'local' ? b : `${r.name}/${b}`}`}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            setBranchActionError(null)
+                            setDeletingKey(key)
+                            try {
+                              const resp = await gql(M_DELETE_BRANCH, { name: repoName, branch: b, remote: r.name === 'local' ? null : r.name }, 'DeleteBranch')
+                              if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to delete branch')
+                              const data = resp.data?.deleteBranch
+                              if (!data?.ok) throw new Error(data?.error || 'Failed to delete branch')
+                              await refreshRemotesAndHistory({ selectHead: true })
+                              setBranchActionError(null)
+                            } catch (err) {
+                              setBranchActionError(err?.message || 'Failed to delete branch')
+                            } finally {
+                              setDeletingKey((prev) => (prev === key ? null : prev))
+                            }
+                          }}
+                          disabled={deletingKey === key || isSwitching}
+                        >
+                          <span aria-hidden="true">{deletingKey === key ? '…' : '🗑'}</span>
                         </button>
                       </li>
                       )

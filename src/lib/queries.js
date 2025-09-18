@@ -3,6 +3,7 @@ export const Q_REMOTES = `query RepoRemotes($name:String!){ remotes(name:$name){
 export const Q_COMMIT = `query Commit($name:String!,$id:String!){ commit(name:$name, id:$id){ id short subject body author{ name email date } committer{ name email date } parents files } }`
 export const M_CREATE_BRANCH = `mutation CreateBranch($name:String!,$remote:String!,$branch:String!){ createBranch(name:$name, remote:$remote, branch:$branch){ ok created pushed pushError } }`
 export const M_CHECKOUT_BRANCH = `mutation CheckoutBranch($name:String!,$branch:String!,$remote:String){ checkoutBranch(name:$name, branch:$branch, remote:$remote){ ok error } }`
+export const M_DELETE_BRANCH = `mutation DeleteBranch($name:String!,$branch:String!,$remote:String){ deleteBranch(name:$name, branch:$branch, remote:$remote){ ok error } }`
 export const Q_STATUS = `query Status($name:String!){ status(name:$name){ staged unstaged } }`
 export const M_STAGE = `mutation Stage($name:String!,$action:String!,$paths:[String!]!){ stage(name:$name, action:$action, paths:$paths){ ok } }`
 export const M_COMMIT = `mutation CommitCreate($name:String!,$message:String!){ commitCreate(name:$name, message:$message){ ok } }`
