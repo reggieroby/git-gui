@@ -157,30 +157,35 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minHeight: 0 }}>
-            {/* Staged section */}
-            <StatusFilesSection
-              title="Staged"
-              files={staged}
-              usePreferences={true}
-              repoName={repoName}
-              statusMode={'staged'}
-              actionLabel="Unstage"
-              onToggle={(path) => onToggleAction('unstage', path)}
-              enableBulk={true}
-              onBulk={() => onToggleMany('unstage', staged)}
-            />
-            {/* Unstaged section */}
-            <StatusFilesSection
-              title="Unstaged"
-              files={unstaged}
-              usePreferences={true}
-              repoName={repoName}
-              statusMode={'unstaged'}
-              actionLabel="Stage"
-              onToggle={(path) => onToggleAction('stage', path)}
-              enableBulk={true}
-              onBulk={() => onToggleMany('stage', unstaged)}
-            />
+            {/* Staged + Unstaged split: each takes half the available vertical space and scroll internally */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1, minHeight: 0 }}>
+              <div style={{ flex: '1 1 50%', minHeight: 0 }}>
+                <StatusFilesSection
+                  title="Staged"
+                  files={staged}
+                  usePreferences={true}
+                  repoName={repoName}
+                  statusMode={'staged'}
+                  actionLabel="Unstage"
+                  onToggle={(path) => onToggleAction('unstage', path)}
+                  enableBulk={true}
+                  onBulk={() => onToggleMany('unstage', staged)}
+                />
+              </div>
+              <div style={{ flex: '1 1 50%', minHeight: 0 }}>
+                <StatusFilesSection
+                  title="Unstaged"
+                  files={unstaged}
+                  usePreferences={true}
+                  repoName={repoName}
+                  statusMode={'unstaged'}
+                  actionLabel="Stage"
+                  onToggle={(path) => onToggleAction('stage', path)}
+                  enableBulk={true}
+                  onBulk={() => onToggleMany('stage', unstaged)}
+                />
+              </div>
+            </div>
             {/* Commit row */}
             <CommitRow repoName={repoName} hasStaged={staged.length > 0} onCommitted={async () => { await onCommitDone(); }} />
           </div>

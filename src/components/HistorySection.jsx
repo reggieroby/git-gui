@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import CommitGraph from '@/components/CommitGraph'
 import gql from '@/lib/gql'
-import { Q_HISTORY, Q_REMOTES, Q_COMMIT, M_CREATE_BRANCH, M_CHECKOUT_BRANCH, M_DELETE_BRANCH, M_MERGE_BRANCH, M_PUSH_BRANCH } from '@/lib/queries'
+import { Q_HISTORY, Q_REMOTES, Q_COMMIT, Q_STATUS, M_CREATE_BRANCH, M_CHECKOUT_BRANCH, M_DELETE_BRANCH, M_MERGE_BRANCH, M_PUSH_BRANCH } from '@/lib/queries'
 import StatusFilesSection from '@/components/StatusFilesSection'
 
 export default function HistorySection({ repoName }) {
@@ -25,6 +25,9 @@ export default function HistorySection({ repoName }) {
   const [pushKey, setPushKey] = useState(null)
   const [httpsAuthDialog, setHttpsAuthDialog] = useState(null)
   const [switchingRemote, setSwitchingRemote] = useState(false)
+  const [statusLoading, setStatusLoading] = useState(false)
+  const [statusError, setStatusError] = useState(null)
+  const [repoStatus, setRepoStatus] = useState({ staged: [], unstaged: [], untrackedCount: 0, modifiedCount: 0 })
 
   useEffect(() => {
     let cancelled = false
@@ -76,8 +79,25 @@ export default function HistorySection({ repoName }) {
       }
     }
     loadRemotes()
+    // also load status
+    loadStatus()
     return () => { cancelled = true }
   }, [repoName])
+
+  async function loadStatus() {
+    setStatusLoading(true)
+    setStatusError(null)
+    try {
+      const resp = await gql(Q_STATUS, { name: repoName }, 'Status')
+      if (resp.errors?.length) throw new Error(resp.errors[0].message || 'Failed to load status')
+      const data = resp.data?.status || { staged: [], unstaged: [], untrackedCount: 0, modifiedCount: 0 }
+      setRepoStatus({ staged: Array.isArray(data.staged) ? data.staged : [], unstaged: Array.isArray(data.unstaged) ? data.unstaged : [], untrackedCount: Number(data.untrackedCount) || 0, modifiedCount: Number(data.modifiedCount) || 0 })
+    } catch (e) {
+      setStatusError(e?.message || 'Failed to load status')
+    } finally {
+      setStatusLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -99,6 +119,7 @@ export default function HistorySection({ repoName }) {
       const resp = await gql(Q_REMOTES, { name: repoName }, 'RepoRemotes')
       if (!resp.errors) setRemotes(Array.isArray(resp.data?.remotes) ? resp.data.remotes : [])
     } catch { }
+    try { await loadStatus() } catch { }
     try {
       const resp2 = await gql(Q_HISTORY, { name: repoName, limit: 200 }, 'RepoHistory')
       if (!resp2.errors) {
@@ -227,6 +248,23 @@ export default function HistorySection({ repoName }) {
             <div style={{ opacity: 0.7 }}>No remotes.</div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
+              {/* Current state */}
+              <div style={{ marginBottom: 8, padding: '8px', border: '1px solid #eef2ff', borderRadius: 8, background: '#fbfdff' }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Current state</div>
+                {statusLoading ? (
+                  <div style={{ opacity: 0.7 }}>Loading status…</div>
+                ) : statusError ? (
+                  <div style={{ color: '#b91c1c' }}>Error: {statusError}</div>
+                ) : (
+                  <div style={{ fontSize: '0.9rem', color: '#374151', display: 'grid', gap: 4 }}>
+                    <div><strong>Clean:</strong> {repoStatus.staged.length === 0 && repoStatus.unstaged.length === 0 ? 'Yes' : 'No'}</div>
+                    <div><strong>Staged:</strong> {repoStatus.staged.length} files</div>
+                    <div><strong>Modified (unstaged):</strong> {repoStatus.modifiedCount}</div>
+                    <div><strong>Untracked:</strong> {repoStatus.untrackedCount}</div>
+                    <div style={{ opacity: 0.85, fontSize: '0.85rem' }}>Note: 'Modified' and 'Untracked' are derived from git porcelain output; unstaged = modified + untracked.</div>
+                  </div>
+                )}
+              </div>
               {remotesForDisplay.map((r) => (
                 <div key={r.name}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>

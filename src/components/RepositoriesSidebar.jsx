@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSelectedLayoutSegments } from 'next/navigation'
+import gql from '@/lib/gql'
+import { Q_STATUS } from '@/lib/queries'
 
 export default function RepositoriesSidebar({ repos, selectedName, selectedRepo }) {
   const segments = useSelectedLayoutSegments()
@@ -10,17 +12,44 @@ export default function RepositoriesSidebar({ repos, selectedName, selectedRepo 
   const currentName = selectedName || derivedName || null
   const activeSection = derivedSection || (currentName ? 'history' : null)
   const [expanded, setExpanded] = useState(!currentName)
+  const repoList = useMemo(() => Array.isArray(repos) ? repos : [], [repos])
+  const currentRepo = currentName
+    ? (selectedRepo && selectedRepo.name === currentName
+      ? selectedRepo
+      : repoList.find((r) => r.name === currentName) || null)
+    : null
+  const [dirtyMap, setDirtyMap] = useState({})
+  const [dirtyLoading, setDirtyLoading] = useState(false)
 
   useEffect(() => {
     setExpanded(!currentName)
   }, [currentName])
 
-  const repoList = useMemo(() => Array.isArray(repos) ? repos : [], [repos])
-  const currentRepo = currentName
-    ? (selectedRepo && selectedRepo.name === currentName
-        ? selectedRepo
-        : repoList.find((r) => r.name === currentName) || null)
-    : null
+  useEffect(() => {
+    let cancelled = false
+    async function loadDirty() {
+      const list = Array.isArray(repos) ? repos : []
+      if (!expanded || list.length === 0) return
+      setDirtyLoading(true)
+      const map = {}
+      for (const r of list) {
+        try {
+          const resp = await gql(Q_STATUS, { name: r.name }, 'Status')
+          if (resp.errors?.length) continue
+          const st = resp.data?.status || { staged: [], unstaged: [] }
+          const hasChanges = (Array.isArray(st.staged) && st.staged.length > 0) || (Array.isArray(st.unstaged) && st.unstaged.length > 0)
+          if (!cancelled && hasChanges) map[r.name] = true
+        } catch (e) {
+          // ignore per-repo failures
+        }
+      }
+      if (!cancelled) setDirtyMap(map)
+      if (!cancelled) setDirtyLoading(false)
+    }
+    loadDirty()
+    return () => { cancelled = true }
+  }, [expanded, repos])
+
 
   return (
     <div className="repositories-collection__sidebar">
@@ -52,7 +81,26 @@ export default function RepositoriesSidebar({ repos, selectedName, selectedRepo 
                 return (
                   <li key={repo.path} className={active ? 'is-active' : undefined}>
                     <Link href={`/repositories/${encodeURIComponent(repo.name)}/history`}>
-                      <span>{repo.name}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <span>{repo.name}</span>
+                        {/* show 'changes' tag when repo is not clean */}
+                        {dirtyMap[repo.name] ? (
+                          <span
+                            title="Repository has unstaged/staged changes"
+                            style={{
+                              whiteSpace: 'nowrap',
+                              fontSize: '0.7rem',
+                              border: '1px solid #fde3c7',
+                              background: '#fff7ed',
+                              color: '#92400e',
+                              padding: '0.06rem 0.4rem',
+                              borderRadius: 999
+                            }}
+                          >
+                            changes
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="branch" title={repo.branch ?? 'unknown'}>{repo.branch ?? 'unknown'}</span>
                     </Link>
                   </li>

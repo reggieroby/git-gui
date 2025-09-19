@@ -97,7 +97,9 @@ const StatusType = new GraphQLObjectType({
   name: 'Status',
   fields: {
     staged: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) },
-    unstaged: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) }
+    unstaged: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLString))) },
+    untrackedCount: { type: new GraphQLNonNull(GraphQLInt) },
+    modifiedCount: { type: new GraphQLNonNull(GraphQLInt) }
   }
 })
 
@@ -783,6 +785,7 @@ function parsePorcelainZ(buf) {
   const parts = s.split('\u0000')
   const staged = new Set()
   const unstaged = new Set()
+  let untrackedCount = 0
   let i = 0
   while (i < parts.length) {
     const entry = parts[i]; i++; if (!entry) continue
@@ -792,9 +795,18 @@ function parsePorcelainZ(buf) {
     if (path.endsWith('/')) path = path.replace(/\/$/, '')
     if ((X === 'R' || X === 'C') && i < parts.length) { const newPath = parts[i]; i++; if (newPath) path = newPath }
     if (X && X !== ' ' && X !== '?') staged.add(path)
-    if (code === '??' || (Y && Y !== ' ')) unstaged.add(path)
+    if (code === '??') {
+      // untracked file
+      untrackedCount += 1
+      unstaged.add(path)
+    } else if (Y && Y !== ' ') {
+      unstaged.add(path)
+    }
   }
-  return { staged: Array.from(staged).sort(), unstaged: Array.from(unstaged).sort() }
+  const stagedArr = Array.from(staged).sort()
+  const unstagedArr = Array.from(unstaged).sort()
+  const modifiedCount = Math.max(0, unstagedArr.length - untrackedCount)
+  return { staged: stagedArr, unstaged: unstagedArr, untrackedCount, modifiedCount }
 }
 
 // Settings and Diff
