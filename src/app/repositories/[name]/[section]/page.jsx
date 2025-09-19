@@ -5,7 +5,7 @@ import RepoView from '@/components/RepoView'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const valid = ['file-status', 'history', 'branches', 'tags', 'stashes']
+const valid = ['file-status', 'history']
 
 export default async function RepoSectionPage({ params }) {
   const { name: rawName, section: rawSection } = await params

@@ -1,7 +1,6 @@
 "use client"
 import { useState, useEffect, useRef, createContext, useContext } from 'react'
 import Link from 'next/link'
-import RepoSidebar from '@/components/RepoSidebar'
 import StatusFilesSection from '@/components/StatusFilesSection'
 import gql from '@/lib/gql'
 import { Q_STATUS, M_STAGE, M_COMMIT } from '@/lib/queries'
@@ -99,23 +98,10 @@ export default function RepoView({ repo, selectedFromRoute, hideSidebar = false 
     }
   }
 
-  const sidebarNode = (
-    <RepoSidebar
-      selected={selected}
-      basePath={`/repositories/${encodeURIComponent(repo.name)}`}
-      onSelect={setSelected}
-      repo={{ name: repo.name, branch: repo.branch, path: repo.path }}
-    />
-  )
 
   return (
     <RepoStatusContext.Provider value={{ staged, unstaged, loading, error }}>
       <div className={`repo-shell${hideSidebar ? ' repo-shell--full' : ''}`}>
-        {!hideSidebar && (
-          <aside className="repo-shell__sidebar">
-            {sidebarNode}
-          </aside>
-        )}
         <section className="repo-shell__content">
           <SectionContent selected={selected} repoName={repo.name} onToggleAction={onToggleAction} onToggleMany={onToggleMany} onCommitDone={() => fetchStatus({ soft: true })} mutating={mutating} />
         </section>
@@ -212,28 +198,6 @@ function SectionContent({ selected, repoName, onToggleAction, onToggleMany, onCo
       </div>
     )
   }
-  if (selected === 'branches') {
-    return (
-      <div>
-        <h2>Branches</h2>
-        <div style={{ opacity: 0.7 }}>Branches list will appear here.</div>
-      </div>
-    )
-  }
-  if (selected === 'tags') {
-    return (
-      <div>
-        <h2>Tags</h2>
-        <div style={{ opacity: 0.7 }}>Tags will appear here.</div>
-      </div>
-    )
-  }
-  return (
-    <div>
-      <h2>Stashes</h2>
-      <div style={{ opacity: 0.7 }}>Stashes will appear here.</div>
-    </div>
-  )
 }
 
 import HistorySection from '@/components/HistorySection'
