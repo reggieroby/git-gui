@@ -1,0 +1,25 @@
+import { notFound } from 'next/navigation'
+import { getLocalRepository } from '@/lib/repos'
+import { RepoConfigEditor } from '@/components/GitConfigEditors'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+export default async function RepoSettingsPage({ params }) {
+  const name = decodeURIComponent(params.name)
+  const repo = await getLocalRepository(name)
+  if (!repo) return notFound()
+
+  return (
+    <div className="repo-shell repo-shell--full">
+      <section className="repo-shell__content">
+        <main style={{ display: 'grid', gap: '1rem' }}>
+          <h2 style={{ marginTop: '1rem' }}>Settings</h2>
+          <div>
+            <RepoConfigEditor repoName={repo.name} />
+          </div>
+        </main>
+      </section>
+    </div>
+  )
+}

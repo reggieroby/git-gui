@@ -1,0 +1,27 @@
+{
+  "name": "git-gui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "predev": "node scripts/migrate.mjs",
+    "prestart": "node scripts/migrate.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "graphql": "^16.11.0",
+    "ruru": "^2.0.0-beta.22",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "umzug": "^3.2.1"
+  },
+  "devDependencies": {
+    "eslint": "latest",
+    "eslint-config-next": "latest"
+  }
+}
