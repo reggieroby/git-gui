@@ -275,6 +275,15 @@ const MutationType = new GraphQLObjectType({
       type: new GraphQLNonNull(PushBranchResultType),
       resolve: (_src, args) => pushBranch(args)
     },
+    setRemoteUrl: {
+      args: {
+        name: { type: new GraphQLNonNull(GraphQLString) },
+        remote: { type: new GraphQLNonNull(GraphQLString) },
+        url: { type: new GraphQLNonNull(GraphQLString) }
+      },
+      type: new GraphQLObjectType({ name: 'SetRemoteUrlResult', fields: { ok: { type: new GraphQLNonNull(GraphQLBoolean) }, error: { type: GraphQLString } } }),
+      resolve: (_src, args) => setRemoteUrl(args)
+    },
     rebaseSquash: {
       args: {
         name: { type: new GraphQLNonNull(GraphQLString) },
@@ -358,13 +367,13 @@ async function history({ name, limit = 200 }) {
     const { stdout: branchOut } = await execFile(gitBin, ['-C', repo.path, 'rev-parse', '--abbrev-ref', 'HEAD'])
     const branchName = branchOut.toString().trim()
     if (branchName && branchName !== 'HEAD') headBranch = branchName
-  } catch {}
+  } catch { }
   if (headBranch) {
     try {
       const { stdout: upstreamOut } = await execFile(gitBin, ['-C', repo.path, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])
       const upstreamRef = upstreamOut.toString().trim()
       if (upstreamRef && upstreamRef !== '@{u}') headUpstream = upstreamRef
-    } catch {}
+    } catch { }
   }
   // remote heads
   try {
@@ -719,6 +728,24 @@ async function status({ name }) {
   const gitBin = process.env.GIT_BIN || 'git'
   const { stdout } = await execFile(gitBin, ['-C', repo.path, 'status', '--porcelain=v1', '-z', '--untracked-files=all'])
   return parsePorcelainZ(stdout)
+}
+
+async function setRemoteUrl({ name, remote, url }) {
+  const repoName = decodeURIComponent(name)
+  const remoteName = decodeURIComponent(remote)
+  const newUrl = decodeURIComponent(url)
+  const repo = await getLocalRepository(repoName)
+  if (!repo) throw new Error('Repository not found')
+  if (!(await isGitRepository(repo.path))) throw new Error('Not a Git repository')
+  const gitBin = process.env.GIT_BIN || 'git'
+  try {
+    await execFile(gitBin, ['-C', repo.path, 'remote', 'set-url', remoteName, newUrl])
+    await chownRepoMaybe(repo.path)
+    return { ok: true, error: null }
+  } catch (error) {
+    const stderr = error?.stderr ? error.stderr.toString().trim() : null
+    return { ok: false, error: stderr || error?.message || 'Failed to set remote URL' }
+  }
 }
 
 async function stage({ name, action, paths }) {
