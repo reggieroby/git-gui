@@ -1,7 +1,10 @@
 import { readdir, readFile, stat } from 'fs/promises'
 import { join } from 'path'
+import { promisify } from 'util'
+import { execFile as _execFile } from 'child_process'
 
 const DEFAULT_ROOT = '/srv/repositories'
+const execFile = promisify(_execFile)
 
 async function readBranch(repoPath) {
   // Try bare repo HEAD first, then non-bare .git/HEAD
@@ -60,4 +63,76 @@ export async function getLocalRepository(name, rootDir = DEFAULT_ROOT) {
   }
   const branch = await readBranch(repoPath)
   return { name, path: repoPath, branch }
+}
+
+async function isGitRepository(repoPath) {
+  try {
+    const head = await stat(join(repoPath, 'HEAD')).catch(() => null)
+    if (head && head.isFile()) return true
+    const gitDir = await stat(join(repoPath, '.git')).catch(() => null)
+    if (gitDir && gitDir.isDirectory()) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+export async function listRepositoryRemotes(repoOrName, rootDir = DEFAULT_ROOT) {
+  const target = typeof repoOrName === 'string'
+    ? await getLocalRepository(repoOrName, rootDir)
+    : repoOrName
+
+  if (!target) return { repo: null, remotes: [] }
+  if (!(await isGitRepository(target.path))) return { repo: target, remotes: [] }
+
+  const gitBin = process.env.GIT_BIN || 'git'
+  const remoteMap = new Map()
+
+  try {
+    const { stdout } = await execFile(gitBin, ['-C', target.path, 'remote', '-v'])
+    stdout.toString().split('\n').forEach((line) => {
+      const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/)
+      if (!match) return
+      const [, name, url, kind] = match
+      if (kind === 'fetch' && !remoteMap.has(name)) remoteMap.set(name, { name, url, branches: [] })
+      if (!remoteMap.has(name)) remoteMap.set(name, { name, url, branches: [] })
+    })
+  } catch {
+    // ignore; remote list may be empty
+  }
+
+  const remotes = []
+  for (const [name, info] of remoteMap.entries()) {
+    try {
+      const { stdout } = await execFile(gitBin, ['-C', target.path, 'for-each-ref', `refs/remotes/${name}/`, '--format=%(refname:strip=3)'])
+      const branches = stdout
+        .toString()
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .filter((b) => b !== 'HEAD')
+        .sort()
+      remotes.push({ ...info, branches })
+    } catch {
+      remotes.push({ ...info, branches: [] })
+    }
+  }
+
+  let localBranches = []
+  try {
+    const { stdout } = await execFile(gitBin, ['-C', target.path, 'for-each-ref', 'refs/heads/', '--format=%(refname:strip=2)'])
+    localBranches = stdout
+      .toString()
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .sort()
+  } catch {
+    localBranches = []
+  }
+
+  remotes.sort((a, b) => a.name.localeCompare(b.name))
+  remotes.unshift({ name: 'local', url: null, branches: localBranches })
+
+  return { repo: target, remotes }
 }
